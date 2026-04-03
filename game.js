@@ -31,6 +31,7 @@
   const PROJECTILE_OFFSCREEN_THRESHOLD = -40;
   const POWER_PROGRESS_MIN_SCALE = 0.88;
   const POWER_PROGRESS_SCALE_GAIN = 0.22;
+  const POWER_PROGRESS_BAR_WIDTH_MULTIPLIER = 2.1;
   const POWER_UP_DIAMOND_OFFSET = 3;
   const POWER_UP_ICON_Y_OFFSET = 1;
   const POWER_TYPE_ICONS = { growth: '+', shield: 'S', speed: '>>', role: 'R' };
@@ -604,7 +605,7 @@
       } else {
         const c = e.powerType === 'growth' ? '#7cff6b' : e.powerType === 'shield' ? '#6bd4ff' : e.powerType === 'speed' ? '#ffd56b' : '#d499ff';
         const maxHp = POWER_HITS_BASE + state.level * POWER_HITS_PER_LEVEL;
-        const completion = 1 - (Math.max(0, e.hp) / Math.max(1, maxHp));
+        const completion = 1 - (Math.max(0, e.hp) / maxHp);
         const scale = POWER_PROGRESS_MIN_SCALE + completion * POWER_PROGRESS_SCALE_GAIN;
         const visualR = e.r * scale;
         ctx.fillStyle = c;
@@ -617,7 +618,7 @@
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 3;
         ctx.stroke();
-        const progressWidth = visualR * 2.1;
+        const progressWidth = visualR * POWER_PROGRESS_BAR_WIDTH_MULTIPLIER;
         const progressHeight = 6;
         const barX = e.x - progressWidth * 0.5;
         const barY = e.y + visualR + 12;
