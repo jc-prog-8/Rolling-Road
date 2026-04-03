@@ -30,7 +30,12 @@
   const PROJECTILE_OFFSCREEN_THRESHOLD = -40;
   const POWER_UP_DIAMOND_OFFSET = 3;
   const POWER_UP_ICON_Y_OFFSET = 1;
+  const POWER_UP_PROGRESS_ARC_OFFSET = 6;
+  const POWER_UP_SHRINK_FACTOR = 0.28;
   const POWER_TYPE_ICONS = { growth: '+', shield: 'S', speed: '>>', role: 'R' };
+  const POWER_TYPE_LABELS = { growth: 'Growth', shield: 'Shield', speed: 'Speed', role: 'Role' };
+  const INITIAL_STATUS_MESSAGE = 'Tap or drag to steer.';
+  const POWER_PROGRESS_STATUS_PREFIX = 'Power target: ';
 
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
@@ -65,6 +70,8 @@
     playerY: canvas.height - PLAYER_BOTTOM_PADDING,
     fireTimer: 0,
     pointerActive: false,
+    nextEntityId: 1,
+    powerStatusTargetId: null,
     levelDefs: []
   };
 
@@ -84,7 +91,7 @@
         events.push({ t: baseT + 1, kind: 'enemy', pattern: 'straight', x: laneA });
         events.push({ t: baseT + 3.5, kind: 'trap', pattern: seg % 3 === 0 ? 'timed' : 'static', x: laneB });
         events.push({ t: baseT + 5, kind: 'enemy', pattern: seg % 2 === 0 ? 'zigzag' : 'straight', x: laneC });
-        events.push({ t: baseT + 8.5, kind: 'enemy', pattern: seg % 2 === 0 ? 'straight' : 'zigzag', x: laneB });
+        events.push({ t: baseT + 11.5, kind: 'enemy', pattern: seg % 2 === 0 ? 'straight' : 'zigzag', x: laneB });
 
         if (seg % 2 === 1) {
           events.push({ t: baseT + 7, kind: 'enemy', pattern: 'flank', x: seg % 4 === 1 ? 0.05 : 0.95 });
@@ -163,6 +170,7 @@
         y,
         r: 24,
         powerType: ev.p,
+        id: state.nextEntityId++,
         hitsTaken: 0,
         hitsRequired: POWER_SHOTS_REQUIRED,
         speed: currentSpeed() * 0.92,
@@ -257,6 +265,7 @@
   }
 
   function applyPower(type) {
+    state.powerStatusTargetId = null;
     if (type === 'growth') {
       const gain = 4 + Math.floor(Math.random() * 4);
       addUnits(gain);
@@ -277,6 +286,30 @@
       state.score += 120;
       statusEl.textContent = 'Role pickup: formation expanded';
     }
+  }
+
+  function formatPowerUpStatus(powerType, hits, required) {
+    const label = POWER_TYPE_LABELS[powerType] || powerType;
+    return `${POWER_PROGRESS_STATUS_PREFIX}${label} ${hits}/${required}`;
+  }
+
+  function isPowerUpStatusMessage(statusText) {
+    return statusText.startsWith(POWER_PROGRESS_STATUS_PREFIX);
+  }
+
+  function shouldClearPowerUpStatus(entity) {
+    return entity.kind === 'power'
+      && entity.hitsTaken > 0
+      && state.powerStatusTargetId === entity.id
+      && isPowerUpStatusMessage(statusEl.textContent);
+  }
+
+  function tracePowerUpDiamond(x, y, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - radius - POWER_UP_DIAMOND_OFFSET);
+    ctx.lineTo(x + radius + POWER_UP_DIAMOND_OFFSET, y);
+    ctx.lineTo(x, y + radius + POWER_UP_DIAMOND_OFFSET);
+    ctx.lineTo(x - radius - POWER_UP_DIAMOND_OFFSET, y);
   }
 
   function recoverAtCheckpoint() {
@@ -342,7 +375,13 @@
     const pr = formationRadius();
 
     state.entities = state.entities.filter((e) => {
-      if (e.y > canvas.height + 120) return false;
+      if (e.y > canvas.height + 120) {
+        if (shouldClearPowerUpStatus(e)) {
+          state.powerStatusTargetId = null;
+          statusEl.textContent = INITIAL_STATUS_MESSAGE;
+        }
+        return false;
+      }
 
       if (e.kind === 'enemy') {
         const dx = e.x - px;
@@ -359,6 +398,7 @@
           return false;
         }
       } else {
+        // Power-up pickup is now intentionally shot-driven (not contact-driven).
         return true;
       }
       return true;
@@ -393,7 +433,8 @@
               applyPower(e.powerType);
               state.fx.push({ type: 'pickup', x: e.x, y: e.y, ttl: 0.45 });
             } else {
-              statusEl.textContent = `${e.powerType} power-up: ${e.hitsTaken}/${e.hitsRequired}`;
+              state.powerStatusTargetId = e.id;
+              statusEl.textContent = formatPowerUpStatus(e.powerType, e.hitsTaken, e.hitsRequired);
             }
           }
           break;
@@ -601,22 +642,20 @@
         }
       } else {
         const c = e.powerType === 'growth' ? '#7cff6b' : e.powerType === 'shield' ? '#6bd4ff' : e.powerType === 'speed' ? '#ffd56b' : '#d499ff';
-        const progress = Math.min(1, e.hitsTaken / e.hitsRequired);
-        const powerRadius = e.r * (1 - progress * 0.28);
+        const hitsRequired = Math.max(1, e.hitsRequired);
+        const progress = Math.min(1, e.hitsTaken / hitsRequired);
+        const powerRadius = e.r * (1 - progress * POWER_UP_SHRINK_FACTOR);
         ctx.fillStyle = c;
-        ctx.beginPath();
-        ctx.moveTo(e.x, e.y - powerRadius - POWER_UP_DIAMOND_OFFSET);
-        ctx.lineTo(e.x + powerRadius + POWER_UP_DIAMOND_OFFSET, e.y);
-        ctx.lineTo(e.x, e.y + powerRadius + POWER_UP_DIAMOND_OFFSET);
-        ctx.lineTo(e.x - powerRadius - POWER_UP_DIAMOND_OFFSET, e.y);
+        tracePowerUpDiamond(e.x, e.y, powerRadius);
         ctx.fill();
         ctx.strokeStyle = 'rgba(255,255,255,0.45)';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(e.x, e.y, e.r + 6, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * progress);
+        ctx.arc(e.x, e.y, e.r + POWER_UP_PROGRESS_ARC_OFFSET, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * progress);
         ctx.stroke();
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 3;
+        tracePowerUpDiamond(e.x, e.y, powerRadius);
         ctx.stroke();
         ctx.fillStyle = '#1c2433';
         const icon = POWER_TYPE_ICONS[e.powerType];
