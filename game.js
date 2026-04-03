@@ -8,6 +8,11 @@
   const KEYBOARD_MOVEMENT_DISTANCE = 180;
   const EXTRA_ENEMY_TIMING_OFFSET = 2.2;
   const EXTRA_POWER_TIMING_OFFSET = 8.2;
+  const BURST_ENEMY_TIMING_OFFSET = 7.8;
+  const SPAWN_SEGMENT_LENGTH = 12;
+  const SPAWN_Y_OFFSET = 24;
+  const ENEMY_RADIUS = 72;
+  const POWER_UP_RADIUS = 72;
   const BASE_ENEMY_HP = 1;
   const POWER_HITS_BASE = 3;
   const POWER_HITS_PER_LEVEL = 1;
@@ -18,8 +23,8 @@
   const MAX_VOLLEY_SIZE = 9;
   const ARMY_VOLLEY_DIVISOR = 12;
   const RANGED_VOLLEY_DIVISOR = 4;
-  const MAX_EXTRA_SPAWN_PROBABILITY = 0.72;
-  const DENSITY_SPAWN_MULTIPLIER = 0.36;
+  const MAX_EXTRA_SPAWN_PROBABILITY = 0.9;
+  const DENSITY_SPAWN_MULTIPLIER = 0.55;
   const MIN_FIRE_INTERVAL = 0.14;
   const BASE_FIRE_INTERVAL = 0.32;
   const MAX_FIRE_REDUCTION = 0.16;
@@ -36,6 +41,10 @@
   const POWER_PROGRESS_BAR_WIDTH_MULTIPLIER = 2.1;
   const POWER_UP_DIAMOND_OFFSET = 3;
   const POWER_UP_ICON_Y_OFFSET = 1;
+  const ENEMY_HOLD_LINE_OFFSET = 64;
+  const ENEMY_BREACH_TICK_SECONDS = 0.75;
+  const ENTITY_CLEANUP_MARGIN = 120;
+  const ARMY_BAR_MAX_UNITS = 180;
   const POWER_TYPE_ICONS = { growth: '+', shield: 'S', speed: '>>', role: 'R' };
 
   const canvas = document.getElementById('gameCanvas');
@@ -80,17 +89,24 @@
       const levelSpeed = BASE_SCROLL + i * 35;
       const density = 1 + i * 0.27;
       const events = [];
-      const segmentLength = 16;
+      const segmentLength = SPAWN_SEGMENT_LENGTH;
       for (let seg = 0; seg < LEVEL_DURATION / segmentLength; seg++) {
         const baseT = seg * segmentLength;
         const laneA = 0.18 + ((seg * 37 + i * 11) % 64) / 100;
         const laneB = 0.18 + ((seg * 53 + i * 7 + 21) % 64) / 100;
         const laneC = 0.18 + ((seg * 29 + i * 13 + 44) % 64) / 100;
+        let burstPattern = 'zigzag';
+        let burstX = laneC;
+        if (seg % 3 === 0) {
+          burstPattern = 'flank';
+          burstX = seg % 2 === 0 ? 0.05 : 0.95;
+        }
 
         events.push({ t: baseT + 1, kind: 'enemy', pattern: 'straight', x: laneA });
         events.push({ t: baseT + EXTRA_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: 'straight', x: laneB });
         events.push({ t: baseT + 3.5, kind: 'trap', pattern: seg % 3 === 0 ? 'timed' : 'static', x: laneB });
         events.push({ t: baseT + 5, kind: 'enemy', pattern: seg % 2 === 0 ? 'zigzag' : 'straight', x: laneC });
+        events.push({ t: baseT + BURST_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: burstPattern, x: burstX });
 
         if (seg % 2 === 1) {
           events.push({ t: baseT + 7, kind: 'enemy', pattern: 'flank', x: seg % 4 === 1 ? 0.05 : 0.95 });
@@ -125,7 +141,7 @@
   }
 
   function spawnEntity(ev) {
-    const y = -30;
+    const y = -Math.max(ENEMY_RADIUS, POWER_UP_RADIUS) - SPAWN_Y_OFFSET;
     const x = ev.x * canvas.width;
     const baseSpeed = currentSpeed() * (0.8 + Math.random() * 0.25);
 
@@ -137,7 +153,7 @@
         kind: 'enemy',
         x,
         y,
-        r: 24,
+        r: ENEMY_RADIUS,
         hp,
         pattern: ev.pattern,
         phase: Math.random() * Math.PI * 2,
@@ -167,7 +183,7 @@
         kind: 'power',
         x,
         y,
-        r: 24,
+        r: POWER_UP_RADIUS,
         hp: POWER_HITS_BASE + state.level * POWER_HITS_PER_LEVEL,
         powerType: ev.p,
         speed: currentSpeed() * 0.92,
@@ -320,17 +336,38 @@
     return 20 + Math.min(66, Math.sqrt(state.armySize) * 8);
   }
 
+  function anchorEnemy(enemy, holdY) {
+    enemy.anchored = true;
+    enemy.y = holdY;
+    enemy.nextDamageAt = state.totalTime;
+  }
+
+  function anchorEnemyIfNeeded(enemy, holdY) {
+    if (!enemy.anchored) anchorEnemy(enemy, holdY);
+  }
+
   function updateEntities(dt) {
+    const enemyHoldY = state.playerY - ENEMY_HOLD_LINE_OFFSET;
+
     for (const e of state.entities) {
       if (e.kind === 'enemy') {
-        if (e.pattern === 'zigzag') {
-          e.phase += dt * 4;
-          e.x += Math.sin(e.phase) * dt * 120;
-        } else if (e.pattern === 'flank') {
+        if (e.anchored) {
           const dir = state.playerX > e.x ? 1 : -1;
-          e.x += dir * dt * 160;
+          e.x += dir * dt * 110;
+          e.y = enemyHoldY;
+        } else {
+          if (e.pattern === 'zigzag') {
+            e.phase += dt * 4;
+            e.x += Math.sin(e.phase) * dt * 120;
+          } else if (e.pattern === 'flank') {
+            const dir = state.playerX > e.x ? 1 : -1;
+            e.x += dir * dt * 160;
+          }
+          e.y += e.speed * dt;
+          if (e.y >= enemyHoldY) {
+            anchorEnemyIfNeeded(e, enemyHoldY);
+          }
         }
-        e.y += e.speed * dt;
       } else if (e.kind === 'trap') {
         e.y += e.speed * dt;
         if (e.pattern === 'timed') {
@@ -347,16 +384,27 @@
     const pr = formationRadius();
 
     state.entities = state.entities.filter((e) => {
-      if (e.y > canvas.height + 120) return false;
+      if (e.kind !== 'enemy' && e.y > canvas.height + ENTITY_CLEANUP_MARGIN) return false;
+      if (
+        e.kind === 'enemy'
+        && (e.x < -ENTITY_CLEANUP_MARGIN - e.r || e.x > canvas.width + ENTITY_CLEANUP_MARGIN + e.r)
+      ) return false;
 
       if (e.kind === 'enemy') {
         const dx = e.x - px;
         const dy = e.y - (py - 30);
         if (dx * dx + dy * dy < (e.r + pr) ** 2) {
+          anchorEnemyIfNeeded(e, enemyHoldY);
           const supportShield = Math.min(3, Math.floor(state.role.support / 3));
-          loseUnits(Math.max(1, 3 - supportShield), 'Enemy hit');
-          state.score += 10 + state.role.ranged;
-          return false;
+          if (state.totalTime >= (e.nextDamageAt || 0)) {
+            loseUnits(Math.max(1, 3 - supportShield), 'Enemy hit');
+            e.nextDamageAt = state.totalTime + ENEMY_BREACH_TICK_SECONDS;
+            if (!e.breachedScoreAwarded) {
+              state.score += 10 + state.role.ranged;
+              e.breachedScoreAwarded = true;
+            }
+          }
+          return true;
         }
       } else if (e.kind === 'trap') {
         if (e.active && overlapsCircleRect(px, py - 20, pr, e.x - e.w * 0.5, e.y - e.h * 0.5, e.w, e.h)) {
@@ -560,6 +608,25 @@
     ctx.fillRect(state.playerX - 3, state.playerY - r - 36, 6, 10);
   }
 
+  function drawArmyBar() {
+    const barHeight = 26;
+    const barY = canvas.height - barHeight;
+    const fillRatio = Math.min(1, state.armySize / ARMY_BAR_MAX_UNITS);
+    ctx.fillStyle = 'rgba(8, 12, 18, 0.85)';
+    ctx.fillRect(0, barY, canvas.width, barHeight);
+    ctx.fillStyle = '#84d4ff';
+    ctx.fillRect(0, barY, canvas.width * fillRatio, barHeight);
+    ctx.strokeStyle = '#d7f2ff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(0, barY, canvas.width, barHeight);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`ARMY ${state.armySize}`, 12, barY + barHeight * 0.5);
+    ctx.textBaseline = 'alphabetic';
+  }
+
   function drawProjectiles() {
     for (const p of state.projectiles) {
       ctx.fillStyle = '#c8f1ff';
@@ -671,6 +738,7 @@
     drawProjectiles();
     drawArmy();
     drawFx();
+    drawArmyBar();
 
     if (!state.running) {
       ctx.fillStyle = 'rgba(8, 12, 18, 0.8)';
