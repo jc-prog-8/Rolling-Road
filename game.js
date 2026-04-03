@@ -363,7 +363,11 @@
       } else {
         const dx = e.x - px;
         const dy = e.y - py;
-        if (dx * dx + dy * dy < (e.r + pr) ** 2) loseUnits(1, 'Power-up collision');
+        if (dx * dx + dy * dy < (e.r + pr) ** 2) {
+          loseUnits(1, 'Power-up collision');
+          e.destroyed = true;
+          return false;
+        }
       }
       return true;
     });
@@ -403,11 +407,7 @@
       }
     }
 
-    state.entities = state.entities.filter((e) => {
-      if (e.kind === 'enemy' && (e.hp <= 0 || e.destroyed)) return false;
-      if (e.kind === 'power' && (e.hp <= 0 || e.destroyed)) return false;
-      return true;
-    });
+    state.entities = state.entities.filter((e) => !((e.kind === 'enemy' || e.kind === 'power') && (e.hp <= 0 || e.destroyed)));
     state.projectiles = state.projectiles.filter((p) => p.y > PROJECTILE_OFFSCREEN_THRESHOLD && !p.destroyed);
   }
 
