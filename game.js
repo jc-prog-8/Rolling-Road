@@ -5,6 +5,31 @@
   const GRACE_SECONDS = 2.8;
   const PLAYER_BOTTOM_PADDING = 170;
   const PLAYER_LATERAL_SPEED = 760;
+  const KEYBOARD_MOVEMENT_DISTANCE = 180;
+  const BASE_ENEMY_HP = 1;
+  const ENEMY_HP_LEVEL_THRESHOLD = 2;
+  const ENEMY_HP_LEVEL_BONUS = 1;
+  const ENEMY_HP_FLANK_BONUS = 1;
+  const BASE_VOLLEY_COUNT = 1;
+  const MAX_VOLLEY_SIZE = 9;
+  const ARMY_VOLLEY_DIVISOR = 12;
+  const RANGED_VOLLEY_DIVISOR = 4;
+  const MAX_EXTRA_SPAWN_PROBABILITY = 0.58;
+  const DENSITY_SPAWN_MULTIPLIER = 0.28;
+  const MIN_FIRE_INTERVAL = 0.14;
+  const BASE_FIRE_INTERVAL = 0.32;
+  const MAX_FIRE_REDUCTION = 0.16;
+  const RANGED_FIRE_COEFFICIENT = 0.006;
+  const MAX_PROJECTILE_SPREAD = 220;
+  const BASE_PROJECTILE_SPREAD = 70;
+  const SPREAD_PER_PROJECTILE = 22;
+  const BASE_PROJECTILE_SPEED = 620;
+  const PROJECTILE_SPEED_PER_LEVEL = 35;
+  const PROJECTILE_SPEED_PER_RANGED_POINT = 6;
+  const PROJECTILE_OFFSCREEN_THRESHOLD = -40;
+  const POWER_UP_DIAMOND_OFFSET = 3;
+  const POWER_UP_ICON_Y_OFFSET = 1;
+  const POWER_TYPE_ICONS = { growth: '+', shield: 'S', speed: '>>', role: 'R' };
 
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
@@ -94,7 +119,9 @@
     const baseSpeed = currentSpeed() * (0.8 + Math.random() * 0.25);
 
     if (ev.kind === 'enemy') {
-      const hp = 1 + (state.level >= 2 ? 1 : 0) + (ev.pattern === 'flank' ? 1 : 0);
+      const hp = BASE_ENEMY_HP
+        + (state.level >= ENEMY_HP_LEVEL_THRESHOLD ? ENEMY_HP_LEVEL_BONUS : 0)
+        + (ev.pattern === 'flank' ? ENEMY_HP_FLANK_BONUS : 0);
       state.entities.push({
         kind: 'enemy',
         x,
@@ -145,16 +172,19 @@
   }
 
   function projectileVolleySize() {
-    return Math.min(9, 1 + Math.floor(state.armySize / 12) + Math.floor(state.role.ranged / 4));
+    return Math.min(
+      MAX_VOLLEY_SIZE,
+      BASE_VOLLEY_COUNT + Math.floor(state.armySize / ARMY_VOLLEY_DIVISOR) + Math.floor(state.role.ranged / RANGED_VOLLEY_DIVISOR)
+    );
   }
 
   function projectileFireInterval() {
-    return Math.max(0.14, 0.32 - Math.min(0.16, state.role.ranged * 0.006));
+    return Math.max(MIN_FIRE_INTERVAL, BASE_FIRE_INTERVAL - Math.min(MAX_FIRE_REDUCTION, state.role.ranged * RANGED_FIRE_COEFFICIENT));
   }
 
   function fireProjectiles() {
     const volley = projectileVolleySize();
-    const spread = Math.min(220, 70 + volley * 22);
+    const spread = Math.min(MAX_PROJECTILE_SPREAD, BASE_PROJECTILE_SPREAD + volley * SPREAD_PER_PROJECTILE);
     for (let i = 0; i < volley; i++) {
       const slot = volley === 1 ? 0.5 : i / (volley - 1);
       const offset = (slot - 0.5) * spread;
@@ -162,7 +192,7 @@
         x: state.playerX + offset,
         y: state.playerY - 45,
         r: 5,
-        speed: 620 + state.level * 35 + state.role.ranged * 6,
+        speed: BASE_PROJECTILE_SPEED + state.level * PROJECTILE_SPEED_PER_LEVEL + state.role.ranged * PROJECTILE_SPEED_PER_RANGED_POINT,
       });
     }
   }
@@ -340,17 +370,17 @@
     }
 
     for (const p of state.projectiles) {
-      if (p.y < -40) continue;
+      if (p.y < PROJECTILE_OFFSCREEN_THRESHOLD) continue;
       for (const e of state.entities) {
         if (e.kind !== 'enemy') continue;
         const dx = e.x - p.x;
         const dy = e.y - p.y;
         if (dx * dx + dy * dy <= (e.r + p.r) ** 2) {
           e.hp -= 1;
-          p.y = -1000;
+          p.destroyed = true;
           state.fx.push({ type: 'hit', x: e.x, y: e.y, ttl: 0.2 });
           if (e.hp <= 0) {
-            e.y = canvas.height + 1000;
+            e.destroyed = true;
             state.score += 22 + state.level * 3;
           }
           break;
@@ -358,8 +388,8 @@
       }
     }
 
-    state.entities = state.entities.filter((e) => !(e.kind === 'enemy' && e.hp <= 0));
-    state.projectiles = state.projectiles.filter((p) => p.y > -40);
+    state.entities = state.entities.filter((e) => !(e.kind === 'enemy' && (e.hp <= 0 || e.destroyed)));
+    state.projectiles = state.projectiles.filter((p) => p.y > PROJECTILE_OFFSCREEN_THRESHOLD && !p.destroyed);
   }
 
   function spawnFromTimeline() {
@@ -367,7 +397,7 @@
     while (def.events.length && def.events[0].t <= state.timeInLevel) {
       const ev = def.events.shift();
       spawnEntity(ev);
-      if (Math.random() < Math.min(0.58, 0.28 * def.density)) {
+      if (Math.random() < Math.min(MAX_EXTRA_SPAWN_PROBABILITY, DENSITY_SPAWN_MULTIPLIER * def.density)) {
         spawnEntity({ t: ev.t, kind: 'enemy', pattern: 'straight', x: Math.random() * 0.84 + 0.08 });
       }
     }
@@ -556,20 +586,22 @@
         const c = e.powerType === 'growth' ? '#7cff6b' : e.powerType === 'shield' ? '#6bd4ff' : e.powerType === 'speed' ? '#ffd56b' : '#d499ff';
         ctx.fillStyle = c;
         ctx.beginPath();
-        ctx.moveTo(e.x, e.y - e.r - 3);
-        ctx.lineTo(e.x + e.r + 3, e.y);
-        ctx.lineTo(e.x, e.y + e.r + 3);
-        ctx.lineTo(e.x - e.r - 3, e.y);
+        ctx.moveTo(e.x, e.y - e.r - POWER_UP_DIAMOND_OFFSET);
+        ctx.lineTo(e.x + e.r + POWER_UP_DIAMOND_OFFSET, e.y);
+        ctx.lineTo(e.x, e.y + e.r + POWER_UP_DIAMOND_OFFSET);
+        ctx.lineTo(e.x - e.r - POWER_UP_DIAMOND_OFFSET, e.y);
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 3;
         ctx.stroke();
         ctx.fillStyle = '#1c2433';
-        const icon = e.powerType === 'growth' ? '+' : e.powerType === 'shield' ? 'S' : e.powerType === 'speed' ? '>>' : 'R';
+        const icon = POWER_TYPE_ICONS[e.powerType];
+        if (!icon) console.warn(`Unknown power type: ${e.powerType}. Valid types are: growth, shield, speed, role. Defaulting to ?.`);
         ctx.font = 'bold 14px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(icon, e.x, e.y + 1);
+        ctx.fillText(icon || '?', e.x, e.y + POWER_UP_ICON_Y_OFFSET);
+        ctx.textAlign = 'start';
         ctx.textBaseline = 'alphabetic';
       }
     }
@@ -660,8 +692,8 @@
       state.touchTargetX = null;
     });
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowLeft') state.touchTargetX = state.playerX - 180;
-      if (e.key === 'ArrowRight') state.touchTargetX = state.playerX + 180;
+      if (e.key === 'ArrowLeft') state.touchTargetX = state.playerX - KEYBOARD_MOVEMENT_DISTANCE;
+      if (e.key === 'ArrowRight') state.touchTargetX = state.playerX + KEYBOARD_MOVEMENT_DISTANCE;
     });
   }
 
