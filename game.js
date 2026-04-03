@@ -13,8 +13,9 @@
   const ROAD_TOP_MIN_X = 0.34;
   const ROAD_TOP_SPAN_X = 0.32;
   const ROAD_TOP_LANE_STEPS = Math.round(ROAD_TOP_SPAN_X * 100);
-  const ENEMY_WIDTH = 108 * 0.75;
-  const ENEMY_HEIGHT = 69 * 0.75;
+  const ENEMY_SIZE_SCALE = 0.75;
+  const ENEMY_WIDTH = 108 * ENEMY_SIZE_SCALE;
+  const ENEMY_HEIGHT = 69 * ENEMY_SIZE_SCALE;
   const POWER_UP_RADIUS = 72;
   const BASE_ENEMY_HP = 2;
   const POWER_HITS_BASE = 3;
@@ -25,6 +26,7 @@
   const MAX_EXTRA_SPAWN_PROBABILITY = 0.9;
   const DENSITY_SPAWN_MULTIPLIER = 0.85;
   const FIRE_INTERVAL_SECONDS = 0.75;
+  const SINGLE_UNIT_SHOT_COUNT = 3;
   const VOLLEY_WIDTH_MULTIPLIER = 1.35;
   const BASE_PROJECTILE_SPEED = 600;
   const PROJECTILE_SPEED_PER_LEVEL = 35;
@@ -78,7 +80,7 @@
     playerY: canvas.height - PLAYER_BOTTOM_PADDING,
     fireTimer: 0,
     shotStaggerTimer: 0,
-    shotOffsetQueue: [],
+    queuedShots: [],
     pointerActive: false,
     levelDefs: []
   };
@@ -174,9 +176,7 @@
     }
 
     if (ev.kind === 'power') {
-      const maxHp = POWER_HITS_BASE
-        + state.level * POWER_HITS_PER_LEVEL
-        + Math.floor(Math.max(0, Math.floor(state.armySize) - 1) / POWER_HITS_PER_ARMY_STEP);
+      const maxHp = powerUpMaxHp();
       state.entities.push({
         kind: 'power',
         x,
@@ -206,14 +206,14 @@
   }
 
   function queueVolley() {
-    const roundedArmySize = Math.max(1, Math.floor(state.armySize));
-    const shotCount = roundedArmySize === 1 ? 3 : roundedArmySize;
+    const effectiveArmySize = Math.max(1, Math.floor(state.armySize));
+    const shotCount = effectiveArmySize === 1 ? SINGLE_UNIT_SHOT_COUNT : effectiveArmySize;
     const shotInterval = FIRE_INTERVAL_SECONDS / shotCount;
     const width = formationRangeX() * VOLLEY_WIDTH_MULTIPLIER;
     for (let i = 0; i < shotCount; i++) {
       const slot = shotCount === 1 ? 0.5 : i / (shotCount - 1);
       const offset = (slot - 0.5) * width;
-      state.shotOffsetQueue.push({ offset, shotInterval });
+      state.queuedShots.push({ offset, shotInterval });
     }
   }
 
@@ -228,11 +228,18 @@
 
   function processQueuedShots(dt) {
     state.shotStaggerTimer -= dt;
-    while (state.shotOffsetQueue.length && state.shotStaggerTimer <= 0) {
-      const queuedShot = state.shotOffsetQueue.shift();
+    while (state.queuedShots.length && state.shotStaggerTimer <= 0) {
+      const queuedShot = state.queuedShots.shift();
       fireQueuedShot(queuedShot.offset);
       state.shotStaggerTimer += queuedShot.shotInterval;
     }
+  }
+
+  function powerUpMaxHp() {
+    const effectiveArmySize = Math.max(1, state.armySize);
+    return POWER_HITS_BASE
+      + state.level * POWER_HITS_PER_LEVEL
+      + Math.floor((effectiveArmySize - 1) / POWER_HITS_PER_ARMY_STEP);
   }
 
   function movePlayerInstantly() {
@@ -646,7 +653,7 @@
         }
       } else {
         const c = '#7cff6b';
-        const maxHp = Math.max(1, e.maxHp || (POWER_HITS_BASE + state.level * POWER_HITS_PER_LEVEL));
+        const maxHp = Math.max(1, e.maxHp);
         const progressRatio = 1 - (Math.max(0, e.hp) / maxHp);
         const scale = POWER_PROGRESS_MIN_SCALE + progressRatio * POWER_PROGRESS_SCALE_GAIN;
         const visualR = e.r * scale;
