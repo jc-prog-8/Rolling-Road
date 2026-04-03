@@ -246,6 +246,7 @@
   function initSetupScreen() {
     setupParameterBindings();
     if (!setupFormEl) return;
+    statusEl.textContent = 'Adjust setup options, then tap Start Game.';
     setupFormEl.addEventListener('submit', (event) => {
       event.preventDefault();
       const setupValues = readSetupValues();
@@ -305,7 +306,6 @@
   }
 
   state.levelDefs = createLevels();
-  statusEl.textContent = 'Adjust setup options, then tap Start Game.';
 
   function spawnEntity(ev) {
     const y = ROAD_HORIZON_Y + SPAWN_Y_OFFSET;
