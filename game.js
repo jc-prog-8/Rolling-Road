@@ -3,18 +3,18 @@
   const LEVEL_DURATION = 240;
   const BASE_SCROLL = 260;
   const PLAYER_BOTTOM_PADDING = 170;
-  const PLAYER_LATERAL_SPEED = 760;
-  const KEYBOARD_MOVEMENT_DISTANCE = 180;
+  const KEYBOARD_MOVEMENT_STEP = 180;
   const EXTRA_ENEMY_TIMING_OFFSET = 2.2;
   const EXTRA_POWER_TIMING_OFFSET = 8.2;
   const BURST_ENEMY_TIMING_OFFSET = 7.8;
+  const EXTRA_SEGMENT_ENEMY_TIMING_OFFSET = 9;
   const SPAWN_SEGMENT_LENGTH = 12;
   const ROAD_HORIZON_Y = 90;
   const ROAD_TOP_MIN_X = 0.34;
   const ROAD_TOP_SPAN_X = 0.32;
   const ROAD_TOP_LANE_STEPS = Math.round(ROAD_TOP_SPAN_X * 100);
-  const ENEMY_WIDTH = 144;
-  const ENEMY_HEIGHT = 92;
+  const ENEMY_WIDTH = 108;
+  const ENEMY_HEIGHT = 69;
   const POWER_UP_RADIUS = 72;
   const BASE_ENEMY_HP = 2;
   const POWER_HITS_BASE = 3;
@@ -23,8 +23,10 @@
   const ENEMY_HP_LEVEL_BONUS = 1;
   const ENEMY_HP_FLANK_BONUS = 1;
   const MAX_EXTRA_SPAWN_PROBABILITY = 0.9;
-  const DENSITY_SPAWN_MULTIPLIER = 0.7;
+  const DENSITY_SPAWN_MULTIPLIER = 0.85;
   const FIRE_INTERVAL_SECONDS = 0.75;
+  const SHOT_STAGGER_SECONDS = 0.045;
+  const VOLLEY_WIDTH_MULTIPLIER = 1.35;
   const BASE_PROJECTILE_SPEED = 600;
   const PROJECTILE_SPEED_PER_LEVEL = 35;
   const PROJECTILE_OFFSCREEN_THRESHOLD = -40;
@@ -33,6 +35,14 @@
   const POWER_PROGRESS_BAR_WIDTH_MULTIPLIER = 2.1;
   const POWER_UP_DIAMOND_OFFSET = 3;
   const POWER_UP_ICON_Y_OFFSET = 1;
+  const SPAWN_Y_OFFSET = -16;
+  const ENEMY_SPEED_MIN_MULTIPLIER = 0.62;
+  const ENEMY_SPEED_RANDOM_RANGE = 0.18;
+  const POWER_UP_SPEED_MULTIPLIER = 0.58;
+  const ARMY_SQUARE_MIN_RADIUS = 20;
+  const ARMY_SQUARE_SIZE_RATIO = 0.92;
+  const ROAD_TOP_WIDTH_RATIO = 0.78;
+  const ROAD_BOTTOM_WIDTH_RATIO = 1;
   const ENEMY_HOLD_LINE_OFFSET = 64;
   const ENEMY_BREACH_TICK_SECONDS = 1;
   const ENTITY_CLEANUP_MARGIN = 120;
@@ -67,6 +77,8 @@
     playerX: canvas.width * 0.5,
     playerY: canvas.height - PLAYER_BOTTOM_PADDING,
     fireTimer: 0,
+    shotStaggerTimer: 0,
+    shotOffsetQueue: [],
     pointerActive: false,
     levelDefs: []
   };
@@ -80,6 +92,7 @@
       const segmentLength = SPAWN_SEGMENT_LENGTH;
       for (let seg = 0; seg < LEVEL_DURATION / segmentLength; seg++) {
         const baseT = seg * segmentLength;
+        const isEvenSeg = seg % 2 === 0;
         const laneA = ROAD_TOP_MIN_X + ((seg * 37 + i * 11) % ROAD_TOP_LANE_STEPS) / 100;
         const laneB = ROAD_TOP_MIN_X + ((seg * 53 + i * 7 + 21) % ROAD_TOP_LANE_STEPS) / 100;
         const laneC = ROAD_TOP_MIN_X + ((seg * 29 + i * 13 + 44) % ROAD_TOP_LANE_STEPS) / 100;
@@ -93,10 +106,11 @@
         events.push({ t: baseT + 1, kind: 'enemy', pattern: 'straight', x: laneA });
         events.push({ t: baseT + EXTRA_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: 'straight', x: laneB });
         events.push({ t: baseT + 3.5, kind: 'trap', pattern: seg % 3 === 0 ? 'timed' : 'static', x: laneB });
-        events.push({ t: baseT + 5, kind: 'enemy', pattern: seg % 2 === 0 ? 'zigzag' : 'straight', x: laneC });
+        events.push({ t: baseT + 5, kind: 'enemy', pattern: isEvenSeg ? 'zigzag' : 'straight', x: laneC });
         events.push({ t: baseT + BURST_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: burstPattern, x: burstX });
+        events.push({ t: baseT + EXTRA_SEGMENT_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: isEvenSeg ? 'straight' : 'zigzag', x: isEvenSeg ? laneA : laneB });
 
-        if (seg % 2 === 1) {
+        if (!isEvenSeg) {
           events.push({
             t: baseT + 7, kind: 'enemy', pattern: 'flank', x: seg % 4 === 1 ? ROAD_TOP_MIN_X : ROAD_TOP_MIN_X + ROAD_TOP_SPAN_X
           });
@@ -122,9 +136,9 @@
   state.levelDefs = createLevels();
 
   function spawnEntity(ev) {
-    const y = ROAD_HORIZON_Y + 6;
+    const y = ROAD_HORIZON_Y + SPAWN_Y_OFFSET;
     const x = ev.x * canvas.width;
-    const baseSpeed = currentSpeed() * (0.8 + Math.random() * 0.25);
+    const baseSpeed = currentSpeed() * (ENEMY_SPEED_MIN_MULTIPLIER + Math.random() * ENEMY_SPEED_RANDOM_RANGE);
 
     if (ev.kind === 'enemy') {
       const hp = BASE_ENEMY_HP
@@ -154,7 +168,6 @@
         h: 24,
         pattern: ev.pattern,
         active: true,
-        timer: 0,
         speed: currentSpeed() * 0.95,
       });
       return;
@@ -168,7 +181,7 @@
         r: POWER_UP_RADIUS,
         hp: POWER_HITS_BASE + state.level * POWER_HITS_PER_LEVEL,
         powerType: ev.p,
-        speed: currentSpeed() * 0.92,
+        speed: currentSpeed() * POWER_UP_SPEED_MULTIPLIER,
       });
     }
   }
@@ -188,19 +201,113 @@
     return 24 + Math.min(90, Math.sqrt(state.armySize) * 8);
   }
 
-  function fireProjectiles() {
+  function queueVolley() {
     const shotCount = Math.max(1, Math.floor(state.armySize));
-    const width = formationRangeX() * 2.4;
+    const width = formationRangeX() * VOLLEY_WIDTH_MULTIPLIER;
     for (let i = 0; i < shotCount; i++) {
       const slot = shotCount === 1 ? 0.5 : i / (shotCount - 1);
       const offset = (slot - 0.5) * width;
-      state.projectiles.push({
-        x: state.playerX + offset,
-        y: state.playerY - formationRangeY() - 20,
-        r: 5,
-        speed: BASE_PROJECTILE_SPEED + state.level * PROJECTILE_SPEED_PER_LEVEL,
-      });
+      state.shotOffsetQueue.push(offset);
     }
+  }
+
+  function fireQueuedShot(offset) {
+    state.projectiles.push({
+      x: state.playerX + offset,
+      y: state.playerY - formationRangeY() - 20,
+      r: 5,
+      speed: BASE_PROJECTILE_SPEED + state.level * PROJECTILE_SPEED_PER_LEVEL,
+    });
+  }
+
+  function processQueuedShots(dt) {
+    state.shotStaggerTimer -= dt;
+    while (state.shotOffsetQueue.length && state.shotStaggerTimer <= 0) {
+      const offset = state.shotOffsetQueue.shift();
+      fireQueuedShot(offset);
+      state.shotStaggerTimer += SHOT_STAGGER_SECONDS;
+    }
+  }
+
+  function movePlayerInstantly() {
+    if (state.touchTargetX !== null) {
+      state.playerX = state.touchTargetX;
+    }
+  }
+
+  function updatePlayerFromKeyboard(e) {
+    if (e.key === 'ArrowLeft') {
+      state.playerX -= KEYBOARD_MOVEMENT_STEP;
+      state.touchTargetX = null;
+    }
+    if (e.key === 'ArrowRight') {
+      state.playerX += KEYBOARD_MOVEMENT_STEP;
+      state.touchTargetX = null;
+    }
+  }
+
+  function clampPlayerX() {
+    const margin = 85;
+    state.playerX = Math.max(margin, Math.min(canvas.width - margin, state.playerX));
+  }
+
+  function updateMovement() {
+    movePlayerInstantly();
+    clampPlayerX();
+  }
+
+  function decrementFireTimer(dt) {
+    state.fireTimer -= dt;
+  }
+
+  function updateFiring(dt) {
+    decrementFireTimer(dt);
+    const fireInterval = FIRE_INTERVAL_SECONDS;
+    while (state.fireTimer <= 0) {
+      queueVolley();
+      state.fireTimer += fireInterval;
+    }
+    processQueuedShots(dt);
+  }
+
+  function updateRoadOffsets(dt) {
+    state.bgOffset += dt * currentSpeed() * 0.13;
+    state.roadOffset += dt * currentSpeed();
+  }
+
+  function updateGameTimers(dt) {
+    state.totalTime += dt;
+    state.timeInLevel += dt;
+    state.score += dt * 8;
+  }
+
+  function updateFx(dt) {
+    state.damageFlash = Math.max(0, state.damageFlash - dt);
+    state.fx = state.fx.filter((f) => {
+      f.ttl -= dt;
+      return f.ttl > 0;
+    });
+  }
+
+  function updateLevelProgression() {
+    if (state.timeInLevel >= LEVEL_DURATION) nextLevel();
+  }
+
+  function updateCore(dt) {
+    spawnFromTimeline();
+    updateEntities(dt);
+    updateFiring(dt);
+    updateProjectiles(dt);
+    updateLevelProgression();
+    updateFx(dt);
+    updateHud();
+  }
+
+  function updateState(dt) {
+    updateGameTimers(dt);
+    updateMovement();
+    updateRoadOffsets(dt);
+    updateCore(dt);
   }
 
   function endRun(reason) {
@@ -273,10 +380,6 @@
         }
       } else if (e.kind === 'trap') {
         e.y += e.speed * dt;
-        if (e.pattern === 'timed') {
-          e.timer += dt;
-          e.active = Math.sin(e.timer * 5) > -0.1;
-        }
       } else {
         e.y += e.speed * dt;
       }
@@ -396,41 +499,7 @@
   function update(dt) {
     if (!state.running) return;
 
-    state.totalTime += dt;
-    state.timeInLevel += dt;
-    state.score += dt * 8;
-
-    if (state.touchTargetX !== null) {
-      const delta = state.touchTargetX - state.playerX;
-      state.playerX += Math.sign(delta) * Math.min(Math.abs(delta), dt * PLAYER_LATERAL_SPEED);
-    }
-
-    const margin = 85;
-    state.playerX = Math.max(margin, Math.min(canvas.width - margin, state.playerX));
-
-    state.bgOffset += dt * currentSpeed() * 0.13;
-    state.roadOffset += dt * currentSpeed();
-
-    spawnFromTimeline();
-    updateEntities(dt);
-    state.fireTimer -= dt;
-    const fireInterval = FIRE_INTERVAL_SECONDS;
-    while (state.fireTimer <= 0) {
-      fireProjectiles();
-      state.fireTimer += fireInterval;
-    }
-    updateProjectiles(dt);
-
-    if (state.timeInLevel >= LEVEL_DURATION) nextLevel();
-
-    state.damageFlash = Math.max(0, state.damageFlash - dt);
-
-    state.fx = state.fx.filter((f) => {
-      f.ttl -= dt;
-      return f.ttl > 0;
-    });
-
-    updateHud();
+    updateState(dt);
   }
 
   function drawParallax() {
@@ -450,8 +519,8 @@
       }
     }
 
-    const roadTopWidth = w * 0.32;
-    const roadBottomWidth = w * 0.92;
+    const roadTopWidth = w * ROAD_TOP_WIDTH_RATIO;
+    const roadBottomWidth = w * ROAD_BOTTOM_WIDTH_RATIO;
     const roadCenter = w * 0.5;
     ctx.beginPath();
     ctx.moveTo(roadCenter - roadTopWidth * 0.5, ROAD_HORIZON_Y);
@@ -487,11 +556,16 @@
     const h = formationRangeY();
     const count = Math.min(state.armySize, 90);
 
+    const dotsPerSide = Math.max(1, Math.ceil(Math.sqrt(count)));
+    const halfSquareSide = Math.max(ARMY_SQUARE_MIN_RADIUS, Math.min(w, h) * ARMY_SQUARE_SIZE_RATIO);
+    const spacing = dotsPerSide > 1 ? (halfSquareSide * 2) / (dotsPerSide - 1) : 0;
+    const originOffset = (dotsPerSide - 1) * spacing * 0.5;
+
     for (let i = 0; i < count; i++) {
-      const a = (i / Math.max(1, count)) * Math.PI * 2;
-      const ring = 0.35 + ((i % 7) / 7) * 0.9;
-      const ux = state.playerX + Math.cos(a) * w * ring * 0.8;
-      const uy = state.playerY + Math.sin(a) * h * ring * 0.9;
+      const row = Math.floor(i / dotsPerSide);
+      const col = i % dotsPerSide;
+      const ux = state.playerX - originOffset + col * spacing;
+      const uy = state.playerY - originOffset + row * spacing;
 
       ctx.fillStyle = '#f3fbff';
       ctx.beginPath();
@@ -686,8 +760,8 @@
       state.touchTargetX = null;
     });
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowLeft') state.touchTargetX = state.playerX - KEYBOARD_MOVEMENT_DISTANCE;
-      if (e.key === 'ArrowRight') state.touchTargetX = state.playerX + KEYBOARD_MOVEMENT_DISTANCE;
+      updatePlayerFromKeyboard(e);
+      clampPlayerX();
     });
   }
 
