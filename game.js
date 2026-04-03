@@ -1,41 +1,44 @@
 (() => {
   const LEVEL_COUNT = 5;
-  const DEFAULT_LEVEL_DURATION = 240;
+  const DEFAULT_RUN_DURATION_MINUTES = 5;
+  const DEFAULT_LEVEL_DURATION = (DEFAULT_RUN_DURATION_MINUTES * 60) / LEVEL_COUNT;
   const DEFAULT_BASE_SCROLL = 260;
-  const DEFAULT_DENSITY_SPAWN_MULTIPLIER = 0.85;
-  const DEFAULT_PROJECTILE_SPEED_PER_LEVEL = 35;
-  const DEFAULT_POWER_SPAWN_RATE_END = 0.35;
+  const DEFAULT_TARGET_ARMY_SIZE = 100;
+  const DEFAULT_ENEMY_RATE_START = 1;
+  const DEFAULT_ENEMY_RATE_END = 3;
+  const DEFAULT_POWER_RATE_START = 0.4;
+  const DEFAULT_POWER_RATE_END = 0.22;
   const DEFAULT_STARTING_ARMY_SIZE = 1;
+  const BASE_FIRE_RATE_PER_SECOND = 1;
+  const TARGET_FIRE_RATE_PER_SECOND = 20;
+  let RUN_DURATION_MINUTES = DEFAULT_RUN_DURATION_MINUTES;
   let LEVEL_DURATION = DEFAULT_LEVEL_DURATION;
   let BASE_SCROLL = DEFAULT_BASE_SCROLL;
+  let TARGET_ARMY_SIZE = DEFAULT_TARGET_ARMY_SIZE;
   const PLAYER_BOTTOM_PADDING = 170;
   const KEYBOARD_MOVEMENT_STEP = 180;
-  const EXTRA_ENEMY_TIMING_OFFSET = 2.2;
-  const EXTRA_POWER_TIMING_OFFSET = 8.2;
-  const BURST_ENEMY_TIMING_OFFSET = 7.8;
-  const EXTRA_SEGMENT_ENEMY_TIMING_OFFSET = 9;
-  const SPAWN_SEGMENT_LENGTH = 12;
   const ROAD_HORIZON_Y = 90;
   const ROAD_TOP_MIN_X = 0.34;
   const ROAD_TOP_SPAN_X = 0.32;
-  const ROAD_TOP_LANE_STEPS = Math.round(ROAD_TOP_SPAN_X * 100);
   const ENEMY_SIZE_SCALE = 0.75;
   const ENEMY_WIDTH = 108 * ENEMY_SIZE_SCALE;
   const ENEMY_HEIGHT = 69 * ENEMY_SIZE_SCALE;
   const POWER_UP_RADIUS = 72;
   const BASE_ENEMY_HP = 2;
-  const POWER_HITS_BASE = 3;
-  const POWER_HITS_PER_LEVEL = 1;
+  const POWER_HITS_BASE = 2;
+  const POWER_HITS_PER_LEVEL = 0;
   const ENEMY_HP_LEVEL_THRESHOLD = 2;
   const ENEMY_HP_LEVEL_BONUS = 1;
   const ENEMY_HP_FLANK_BONUS = 1;
-  const MAX_EXTRA_SPAWN_PROBABILITY = 0.9;
-  let DENSITY_SPAWN_MULTIPLIER = DEFAULT_DENSITY_SPAWN_MULTIPLIER;
-  const FIRE_INTERVAL_SECONDS = 0.75;
-  const SINGLE_UNIT_SHOT_COUNT = 3;
-  const VOLLEY_WIDTH_MULTIPLIER = 1.35;
+  const ENEMY_RATE_PROGRESS_CURVE = 1.12;
+  const POWER_RATE_PROGRESS_CURVE = 0.92;
+  const TRAP_RATE_START = 0.08;
+  const TRAP_RATE_END = 0.55;
+  const SPAWN_JITTER_MIN = 0.82;
+  const SPAWN_JITTER_MAX = 1.18;
+  const VOLLEY_WIDTH_MULTIPLIER = 1.1;
   const BASE_PROJECTILE_SPEED = 600;
-  let PROJECTILE_SPEED_PER_LEVEL = DEFAULT_PROJECTILE_SPEED_PER_LEVEL;
+  const PROJECTILE_SPEED_PER_LEVEL = 22;
   const PROJECTILE_OFFSCREEN_THRESHOLD = -40;
   const POWER_PROGRESS_MIN_SCALE = 0.88;
   const POWER_PROGRESS_SCALE_GAIN = 0.22;
@@ -46,7 +49,7 @@
   const ENEMY_SPEED_MIN_MULTIPLIER = 0.5;
   const ENEMY_SPEED_RANDOM_RANGE = 0.12;
   const POWER_UP_SPEED_MULTIPLIER = 0.44;
-  const POWER_HITS_PER_ARMY_STEP = 6;
+  const POWER_HITS_PER_ARMY_STEP = 18;
   const ARMY_SQUARE_MIN_RADIUS = 20;
   const ARMY_SQUARE_SIZE_RATIO = 0.92;
   const ROAD_TOP_WIDTH_RATIO = 0.78;
@@ -56,7 +59,7 @@
   const ENTITY_CLEANUP_MARGIN = 120;
   const ARMY_BAR_MAX_UNITS = 180;
   const POWER_GROWTH_MIN_GAIN = 1;
-  const POWER_GROWTH_GAIN_RANGE = 1;
+  const POWER_GROWTH_CATCH_UP_BONUS = 2;
   const POWER_TYPE_ICONS = { growth: '+' };
   const SUN_GLOW_RADIUS = 190;
   const MOUNTAIN_LAYER_WIDTH = 260;
@@ -66,9 +69,10 @@
   const POWER_PULSE_SPEED = 3.3;
   const POWER_PULSE_OFFSET = 0.02;
   const POWER_PULSE_AMPLITUDE = 0.08;
-  const POWER_SPAWN_RATE_START = 1;
-  let POWER_SPAWN_RATE_END = DEFAULT_POWER_SPAWN_RATE_END;
-  const ENEMY_PRESSURE_FROM_POWER_DROP = 0.8;
+  let ENEMY_RATE_START = DEFAULT_ENEMY_RATE_START;
+  let ENEMY_RATE_END = DEFAULT_ENEMY_RATE_END;
+  let POWER_RATE_START = DEFAULT_POWER_RATE_START;
+  let POWER_RATE_END = DEFAULT_POWER_RATE_END;
   const ROAD_TILE_INSET_RATIO = 0.06;
   const ROAD_SIDE_LINE_GAP = 34;
   const ROAD_SIDE_LINE_LENGTH = 18;
@@ -108,45 +112,52 @@
     playerX: canvas.width * 0.5,
     playerY: canvas.height - PLAYER_BOTTOM_PADDING,
     fireTimer: 0,
-    shotStaggerTimer: 0,
-    queuedShots: [],
+    enemySpawnTimer: 0,
+    trapSpawnTimer: 0,
+    powerSpawnTimer: 0,
     pointerActive: false,
-    levelDefs: []
   };
 
   const setupConfig = {
-    levelDuration: {
-      defaultValue: DEFAULT_LEVEL_DURATION,
-      min: 120,
-      max: 360,
-      step: 10,
-      parse: (value) => Number.parseInt(value, 10)
+    runDurationMinutes: {
+      defaultValue: DEFAULT_RUN_DURATION_MINUTES,
+      min: 3,
+      max: 10,
+      step: 0.5,
+      parse: (value) => Number.parseFloat(value)
     },
-    baseScroll: {
-      defaultValue: DEFAULT_BASE_SCROLL,
-      min: 180,
-      max: 360,
+    targetArmySize: {
+      defaultValue: DEFAULT_TARGET_ARMY_SIZE,
+      min: 40,
+      max: 200,
       step: 5,
       parse: (value) => Number.parseInt(value, 10)
     },
-    enemyDensityMultiplier: {
-      defaultValue: DEFAULT_DENSITY_SPAWN_MULTIPLIER,
+    enemyRateStart: {
+      defaultValue: DEFAULT_ENEMY_RATE_START,
       min: 0.5,
+      max: 3.5,
+      step: 0.05,
+      parse: (value) => Number.parseFloat(value)
+    },
+    enemyRateEnd: {
+      defaultValue: DEFAULT_ENEMY_RATE_END,
+      min: 1,
+      max: 6,
+      step: 0.05,
+      parse: (value) => Number.parseFloat(value)
+    },
+    powerRateStart: {
+      defaultValue: DEFAULT_POWER_RATE_START,
+      min: 0.1,
       max: 1.5,
       step: 0.05,
       parse: (value) => Number.parseFloat(value)
     },
-    projectileSpeedPerLevel: {
-      defaultValue: DEFAULT_PROJECTILE_SPEED_PER_LEVEL,
-      min: 10,
-      max: 70,
-      step: 1,
-      parse: (value) => Number.parseInt(value, 10)
-    },
-    powerSpawnRateEnd: {
-      defaultValue: DEFAULT_POWER_SPAWN_RATE_END,
-      min: 0.1,
-      max: 0.8,
+    powerRateEnd: {
+      defaultValue: DEFAULT_POWER_RATE_END,
+      min: 0.05,
+      max: 1.2,
       step: 0.05,
       parse: (value) => Number.parseFloat(value)
     },
@@ -218,11 +229,13 @@
   }
 
   function applySetupValues(values) {
-    LEVEL_DURATION = values.levelDuration;
-    BASE_SCROLL = values.baseScroll;
-    DENSITY_SPAWN_MULTIPLIER = values.enemyDensityMultiplier;
-    PROJECTILE_SPEED_PER_LEVEL = values.projectileSpeedPerLevel;
-    POWER_SPAWN_RATE_END = values.powerSpawnRateEnd;
+    RUN_DURATION_MINUTES = values.runDurationMinutes;
+    LEVEL_DURATION = (RUN_DURATION_MINUTES * 60) / LEVEL_COUNT;
+    TARGET_ARMY_SIZE = values.targetArmySize;
+    ENEMY_RATE_START = values.enemyRateStart;
+    ENEMY_RATE_END = Math.max(values.enemyRateStart, values.enemyRateEnd);
+    POWER_RATE_START = values.powerRateStart;
+    POWER_RATE_END = Math.min(values.powerRateStart, values.powerRateEnd);
     state.armySize = values.startingArmySize;
     state.level = 0;
     state.timeInLevel = 0;
@@ -231,14 +244,14 @@
     state.entities = [];
     state.projectiles = [];
     state.fx = [];
-    state.fireTimer = 0;
-    state.shotStaggerTimer = 0;
-    state.queuedShots = [];
+    state.fireTimer = 1 / currentFireRatePerSecond();
+    state.enemySpawnTimer = 1 / currentEnemySpawnRate();
+    state.trapSpawnTimer = 1 / currentTrapSpawnRate();
+    state.powerSpawnTimer = 1 / currentPowerSpawnRate();
     state.damageFlash = 0;
     state.victory = false;
     state.running = true;
     state.started = true;
-    state.levelDefs = createLevels();
     updateHud();
     statusEl.textContent = 'Game started. Tap or drag to steer.';
   }
@@ -254,58 +267,6 @@
       if (setupScreenEl) setupScreenEl.classList.add('hidden');
     });
   }
-
-  function createLevels() {
-    const defs = [];
-    for (let i = 0; i < LEVEL_COUNT; i++) {
-      const levelSpeed = BASE_SCROLL + i * 35;
-      const density = 1 + i * 0.27;
-      const events = [];
-      const segmentLength = SPAWN_SEGMENT_LENGTH;
-      for (let seg = 0; seg < LEVEL_DURATION / segmentLength; seg++) {
-        const baseT = seg * segmentLength;
-        const isEvenSeg = seg % 2 === 0;
-        const laneA = ROAD_TOP_MIN_X + ((seg * 37 + i * 11) % ROAD_TOP_LANE_STEPS) / 100;
-        const laneB = ROAD_TOP_MIN_X + ((seg * 53 + i * 7 + 21) % ROAD_TOP_LANE_STEPS) / 100;
-        const laneC = ROAD_TOP_MIN_X + ((seg * 29 + i * 13 + 44) % ROAD_TOP_LANE_STEPS) / 100;
-        let burstPattern = 'zigzag';
-        let burstX = laneC;
-        if (seg % 3 === 0) {
-          burstPattern = 'flank';
-          burstX = seg % 2 === 0 ? ROAD_TOP_MIN_X : ROAD_TOP_MIN_X + ROAD_TOP_SPAN_X;
-        }
-
-        events.push({ t: baseT + 1, kind: 'enemy', pattern: 'straight', x: laneA });
-        events.push({ t: baseT + EXTRA_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: 'straight', x: laneB });
-        events.push({ t: baseT + 3.5, kind: 'trap', pattern: seg % 3 === 0 ? 'timed' : 'static', x: laneB });
-        events.push({ t: baseT + 5, kind: 'enemy', pattern: isEvenSeg ? 'zigzag' : 'straight', x: laneC });
-        events.push({ t: baseT + BURST_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: burstPattern, x: burstX });
-        events.push({ t: baseT + EXTRA_SEGMENT_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: isEvenSeg ? 'straight' : 'zigzag', x: isEvenSeg ? laneA : laneB });
-
-        if (!isEvenSeg) {
-          events.push({
-            t: baseT + 7, kind: 'enemy', pattern: 'flank', x: seg % 4 === 1 ? ROAD_TOP_MIN_X : ROAD_TOP_MIN_X + ROAD_TOP_SPAN_X
-          });
-        }
-        if (seg % 2 === 0) {
-          events.push({ t: baseT + EXTRA_POWER_TIMING_OFFSET, kind: 'power', p: 'growth', x: laneC });
-        }
-        if (seg % 3 === 0) {
-          events.push({ t: baseT + 9.5, kind: 'power', p: 'growth', x: laneA });
-        }
-        if (seg % 4 === 2) {
-          events.push({ t: baseT + 10.5, kind: 'power', p: 'growth', x: laneB });
-        }
-        if (seg % 5 === 1) {
-          events.push({ t: baseT + 12, kind: 'power', p: 'growth', x: laneC });
-        }
-      }
-      defs.push({ speed: levelSpeed, density, events: events.sort((a, b) => a.t - b.t) });
-    }
-    return defs;
-  }
-
-  state.levelDefs = createLevels();
 
   function spawnEntity(ev) {
     const y = ROAD_HORIZON_Y + SPAWN_Y_OFFSET;
@@ -361,10 +322,11 @@
   }
 
   function currentSpeed() {
-    const levelDef = state.levelDefs[state.level];
-    const milestoneBoost = Math.floor(state.score / 500) * 12;
-    const progressBoost = (state.timeInLevel / LEVEL_DURATION) * 80;
-    return levelDef.speed + milestoneBoost + progressBoost;
+    const progress = overallProgressRatio();
+    const levelBoost = state.level * 35;
+    const progressBoost = progress * 90;
+    const milestoneBoost = Math.floor(state.score / 700) * 10;
+    return BASE_SCROLL + levelBoost + progressBoost + milestoneBoost;
   }
 
   function formationRangeX() {
@@ -381,55 +343,59 @@
     return Math.max(0, Math.min(1, elapsed / totalDuration));
   }
 
+  function lerp(start, end, ratio) {
+    return start + (end - start) * ratio;
+  }
+
+  function easedRatio(ratio, curve) {
+    return Math.pow(Math.max(0, Math.min(1, ratio)), curve);
+  }
+
+  function randomRoadX() {
+    return ROAD_TOP_MIN_X + Math.random() * ROAD_TOP_SPAN_X;
+  }
+
+  function currentEnemySpawnRate() {
+    const ratio = easedRatio(overallProgressRatio(), ENEMY_RATE_PROGRESS_CURVE);
+    return lerp(ENEMY_RATE_START, ENEMY_RATE_END, ratio);
+  }
+
   function currentPowerSpawnRate() {
-    const progress = overallProgressRatio();
-    return POWER_SPAWN_RATE_START - ((POWER_SPAWN_RATE_START - POWER_SPAWN_RATE_END) * progress);
+    const ratio = easedRatio(overallProgressRatio(), POWER_RATE_PROGRESS_CURVE);
+    return lerp(POWER_RATE_START, POWER_RATE_END, ratio);
   }
 
-  function enemyPressureMultiplier() {
-    const powerRate = currentPowerSpawnRate();
-    const powerDropRatio = (POWER_SPAWN_RATE_START - powerRate) / POWER_SPAWN_RATE_START;
-    return 1 + (powerDropRatio * ENEMY_PRESSURE_FROM_POWER_DROP);
+  function currentTrapSpawnRate() {
+    const ratio = easedRatio(overallProgressRatio(), 1.2);
+    return lerp(TRAP_RATE_START, TRAP_RATE_END, ratio);
   }
 
-  function queueVolley() {
-    const clampedArmySize = Math.max(1, Math.floor(state.armySize));
-    const shotCount = clampedArmySize === 1 ? SINGLE_UNIT_SHOT_COUNT : clampedArmySize;
-    const shotInterval = FIRE_INTERVAL_SECONDS / shotCount;
+  function spawnIntervalFromRate(ratePerSecond) {
+    const safeRate = Math.max(0.01, ratePerSecond);
+    const jitter = SPAWN_JITTER_MIN + Math.random() * (SPAWN_JITTER_MAX - SPAWN_JITTER_MIN);
+    return (1 / safeRate) * jitter;
+  }
+
+  function currentFireRatePerSecond() {
+    const clampedTarget = Math.max(1, TARGET_ARMY_SIZE);
+    const clampedArmy = Math.max(1, state.armySize);
+    const ratio = Math.max(0, Math.min(1, (clampedArmy - 1) / (clampedTarget - 1 || 1)));
+    return lerp(BASE_FIRE_RATE_PER_SECOND, TARGET_FIRE_RATE_PER_SECOND, ratio);
+  }
+
+  function currentFireInterval() {
+    return 1 / currentFireRatePerSecond();
+  }
+
+  function fireProjectile() {
     const width = formationRangeX() * VOLLEY_WIDTH_MULTIPLIER;
-    const offsets = [];
-    for (let i = 0; i < shotCount; i++) {
-      const slot = shotCount === 1 ? 0.5 : i / (shotCount - 1);
-      const offset = (slot - 0.5) * width;
-      offsets.push(offset);
-    }
-    for (let i = offsets.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const tmp = offsets[i];
-      offsets[i] = offsets[j];
-      offsets[j] = tmp;
-    }
-    for (const offset of offsets) {
-      state.queuedShots.push({ offset, shotInterval });
-    }
-  }
-
-  function fireQueuedShot(offset) {
+    const offset = (Math.random() - 0.5) * width;
     state.projectiles.push({
       x: state.playerX + offset,
       y: state.playerY - formationRangeY() - 20,
       r: 5,
       speed: BASE_PROJECTILE_SPEED + state.level * PROJECTILE_SPEED_PER_LEVEL,
     });
-  }
-
-  function processQueuedShots(dt) {
-    state.shotStaggerTimer -= dt;
-    while (state.queuedShots.length && state.shotStaggerTimer <= 0) {
-      const queuedShot = state.queuedShots.shift();
-      fireQueuedShot(queuedShot.offset);
-      state.shotStaggerTimer += queuedShot.shotInterval;
-    }
   }
 
   function powerUpMaxHp() {
@@ -472,12 +438,11 @@
 
   function updateFiring(dt) {
     decrementFireTimer(dt);
-    const fireInterval = FIRE_INTERVAL_SECONDS;
+    const fireInterval = currentFireInterval();
     while (state.fireTimer <= 0) {
-      queueVolley();
+      fireProjectile();
       state.fireTimer += fireInterval;
     }
-    processQueuedShots(dt);
   }
 
   function updateRoadOffsets(dt) {
@@ -503,8 +468,31 @@
     if (state.timeInLevel >= LEVEL_DURATION) nextLevel();
   }
 
+  function spawnFromRates(dt) {
+    state.enemySpawnTimer -= dt;
+    while (state.enemySpawnTimer <= 0) {
+      const roll = Math.random();
+      const pattern = roll < 0.55 ? 'straight' : (roll < 0.85 ? 'zigzag' : 'flank');
+      spawnEntity({ kind: 'enemy', pattern, x: randomRoadX() });
+      state.enemySpawnTimer += spawnIntervalFromRate(currentEnemySpawnRate());
+    }
+
+    state.trapSpawnTimer -= dt;
+    while (state.trapSpawnTimer <= 0) {
+      const pattern = Math.random() < 0.5 ? 'static' : 'timed';
+      spawnEntity({ kind: 'trap', pattern, x: randomRoadX() });
+      state.trapSpawnTimer += spawnIntervalFromRate(currentTrapSpawnRate());
+    }
+
+    state.powerSpawnTimer -= dt;
+    while (state.powerSpawnTimer <= 0) {
+      spawnEntity({ kind: 'power', p: 'growth', x: randomRoadX() });
+      state.powerSpawnTimer += spawnIntervalFromRate(currentPowerSpawnRate());
+    }
+  }
+
   function updateCore(dt) {
-    spawnFromTimeline();
+    spawnFromRates(dt);
     updateEntities(dt);
     updateFiring(dt);
     updateProjectiles(dt);
@@ -542,7 +530,10 @@
   }
 
   function applyGrowthPower() {
-    const gain = POWER_GROWTH_MIN_GAIN + Math.floor(Math.random() * POWER_GROWTH_GAIN_RANGE);
+    const expectedArmy = lerp(1, TARGET_ARMY_SIZE, overallProgressRatio());
+    const armyGap = expectedArmy - state.armySize;
+    const catchUpGain = armyGap > 12 ? POWER_GROWTH_CATCH_UP_BONUS : 0;
+    const gain = POWER_GROWTH_MIN_GAIN + catchUpGain;
     addUnits(gain);
     state.score += 90;
     statusEl.textContent = `Growth pickup: +${gain} units`;
@@ -680,25 +671,6 @@
     state.projectiles = state.projectiles.filter((p) => p.y > PROJECTILE_OFFSCREEN_THRESHOLD && !p.destroyed);
   }
 
-  function spawnFromTimeline() {
-    const def = state.levelDefs[state.level];
-    while (def.events.length && def.events[0].t <= state.timeInLevel) {
-      const ev = def.events.shift();
-      let spawned = false;
-      if (ev.kind !== 'power' || Math.random() < currentPowerSpawnRate()) {
-        spawnEntity(ev);
-        spawned = true;
-      }
-      const extraEnemyChance = Math.min(
-        MAX_EXTRA_SPAWN_PROBABILITY,
-        DENSITY_SPAWN_MULTIPLIER * def.density * enemyPressureMultiplier()
-      );
-      if (spawned && Math.random() < extraEnemyChance) {
-        spawnEntity({ t: ev.t, kind: 'enemy', pattern: 'straight', x: ROAD_TOP_MIN_X + Math.random() * ROAD_TOP_SPAN_X });
-      }
-    }
-  }
-
   function nextLevel() {
     state.level += 1;
     if (state.level >= LEVEL_COUNT) {
@@ -710,7 +682,9 @@
     state.timeInLevel = 0;
     state.entities = [];
     state.projectiles = [];
-    state.levelDefs[state.level] = createLevels()[state.level];
+    state.enemySpawnTimer = spawnIntervalFromRate(currentEnemySpawnRate());
+    state.trapSpawnTimer = spawnIntervalFromRate(currentTrapSpawnRate());
+    state.powerSpawnTimer = spawnIntervalFromRate(currentPowerSpawnRate());
     statusEl.textContent = `Level ${state.level + 1} start`;
   }
 
