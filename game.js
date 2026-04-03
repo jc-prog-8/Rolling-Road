@@ -6,7 +6,11 @@
   const PLAYER_BOTTOM_PADDING = 170;
   const PLAYER_LATERAL_SPEED = 760;
   const KEYBOARD_MOVEMENT_DISTANCE = 180;
+  const EXTRA_ENEMY_TIMING_OFFSET = 2.2;
+  const EXTRA_POWER_TIMING_OFFSET = 8.2;
   const BASE_ENEMY_HP = 1;
+  const POWER_HITS_BASE = 3;
+  const POWER_HITS_PER_LEVEL = 1;
   const ENEMY_HP_LEVEL_THRESHOLD = 2;
   const ENEMY_HP_LEVEL_BONUS = 1;
   const ENEMY_HP_FLANK_BONUS = 1;
@@ -14,8 +18,8 @@
   const MAX_VOLLEY_SIZE = 9;
   const ARMY_VOLLEY_DIVISOR = 12;
   const RANGED_VOLLEY_DIVISOR = 4;
-  const MAX_EXTRA_SPAWN_PROBABILITY = 0.58;
-  const DENSITY_SPAWN_MULTIPLIER = 0.28;
+  const MAX_EXTRA_SPAWN_PROBABILITY = 0.72;
+  const DENSITY_SPAWN_MULTIPLIER = 0.36;
   const MIN_FIRE_INTERVAL = 0.14;
   const BASE_FIRE_INTERVAL = 0.32;
   const MAX_FIRE_REDUCTION = 0.16;
@@ -23,10 +27,13 @@
   const MAX_PROJECTILE_SPREAD = 220;
   const BASE_PROJECTILE_SPREAD = 70;
   const SPREAD_PER_PROJECTILE = 22;
-  const BASE_PROJECTILE_SPEED = 620;
+  const BASE_PROJECTILE_SPEED = 600;
   const PROJECTILE_SPEED_PER_LEVEL = 35;
   const PROJECTILE_SPEED_PER_RANGED_POINT = 6;
   const PROJECTILE_OFFSCREEN_THRESHOLD = -40;
+  const POWER_PROGRESS_MIN_SCALE = 0.88;
+  const POWER_PROGRESS_SCALE_GAIN = 0.22;
+  const POWER_PROGRESS_BAR_WIDTH_MULTIPLIER = 2.1;
   const POWER_UP_DIAMOND_OFFSET = 3;
   const POWER_UP_ICON_Y_OFFSET = 1;
   const POWER_TYPE_ICONS = { growth: '+', shield: 'S', speed: '>>', role: 'R' };
@@ -71,7 +78,7 @@
     const defs = [];
     for (let i = 0; i < LEVEL_COUNT; i++) {
       const levelSpeed = BASE_SCROLL + i * 35;
-      const density = 1 + i * 0.23;
+      const density = 1 + i * 0.27;
       const events = [];
       const segmentLength = 16;
       for (let seg = 0; seg < LEVEL_DURATION / segmentLength; seg++) {
@@ -81,11 +88,15 @@
         const laneC = 0.18 + ((seg * 29 + i * 13 + 44) % 64) / 100;
 
         events.push({ t: baseT + 1, kind: 'enemy', pattern: 'straight', x: laneA });
+        events.push({ t: baseT + EXTRA_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: 'straight', x: laneB });
         events.push({ t: baseT + 3.5, kind: 'trap', pattern: seg % 3 === 0 ? 'timed' : 'static', x: laneB });
         events.push({ t: baseT + 5, kind: 'enemy', pattern: seg % 2 === 0 ? 'zigzag' : 'straight', x: laneC });
 
         if (seg % 2 === 1) {
           events.push({ t: baseT + 7, kind: 'enemy', pattern: 'flank', x: seg % 4 === 1 ? 0.05 : 0.95 });
+        }
+        if (seg % 2 === 0) {
+          events.push({ t: baseT + EXTRA_POWER_TIMING_OFFSET, kind: 'power', p: seg % 4 === 0 ? 'shield' : 'speed', x: laneC });
         }
         if (seg % 3 === 0) {
           events.push({ t: baseT + 9.5, kind: 'power', p: 'growth', x: laneA });
@@ -126,7 +137,7 @@
         kind: 'enemy',
         x,
         y,
-        r: 18,
+        r: 24,
         hp,
         pattern: ev.pattern,
         phase: Math.random() * Math.PI * 2,
@@ -156,7 +167,8 @@
         kind: 'power',
         x,
         y,
-        r: 17,
+        r: 24,
+        hp: POWER_HITS_BASE + state.level * POWER_HITS_PER_LEVEL,
         powerType: ev.p,
         speed: currentSpeed() * 0.92,
       });
@@ -354,11 +366,7 @@
       } else {
         const dx = e.x - px;
         const dy = e.y - py;
-        if (dx * dx + dy * dy < (e.r + pr) ** 2) {
-          applyPower(e.powerType);
-          state.fx.push({ type: 'pickup', x: e.x, y: e.y, ttl: 0.45 });
-          return false;
-        }
+        if (dx * dx + dy * dy < (e.r + pr) ** 2) return true;
       }
       return true;
     });
@@ -372,23 +380,33 @@
     for (const p of state.projectiles) {
       if (p.y < PROJECTILE_OFFSCREEN_THRESHOLD) continue;
       for (const e of state.entities) {
-        if (e.kind !== 'enemy') continue;
+        if (e.kind !== 'enemy' && e.kind !== 'power') continue;
         const dx = e.x - p.x;
         const dy = e.y - p.y;
         if (dx * dx + dy * dy <= (e.r + p.r) ** 2) {
-          e.hp -= 1;
           p.destroyed = true;
-          state.fx.push({ type: 'hit', x: e.x, y: e.y, ttl: 0.2 });
-          if (e.hp <= 0) {
-            e.destroyed = true;
-            state.score += 22 + state.level * 3;
+          if (e.kind === 'power') {
+            e.hp -= 1;
+            state.fx.push({ type: 'hit', x: e.x, y: e.y, ttl: 0.18 });
+            if (e.hp <= 0) {
+              e.destroyed = true;
+              applyPower(e.powerType);
+              state.fx.push({ type: 'pickup', x: e.x, y: e.y, ttl: 0.45 });
+            }
+          } else {
+            e.hp -= 1;
+            state.fx.push({ type: 'hit', x: e.x, y: e.y, ttl: 0.2 });
+            if (e.hp <= 0) {
+              e.destroyed = true;
+              state.score += 22 + state.level * 3;
+            }
           }
           break;
         }
       }
     }
 
-    state.entities = state.entities.filter((e) => !(e.kind === 'enemy' && (e.hp <= 0 || e.destroyed)));
+    state.entities = state.entities.filter((e) => !((e.kind === 'enemy' || e.kind === 'power') && (e.hp <= 0 || e.destroyed)));
     state.projectiles = state.projectiles.filter((p) => p.y > PROJECTILE_OFFSCREEN_THRESHOLD && !p.destroyed);
   }
 
@@ -584,16 +602,28 @@
         }
       } else {
         const c = e.powerType === 'growth' ? '#7cff6b' : e.powerType === 'shield' ? '#6bd4ff' : e.powerType === 'speed' ? '#ffd56b' : '#d499ff';
+        const maxHp = POWER_HITS_BASE + state.level * POWER_HITS_PER_LEVEL;
+        const progressRatio = 1 - (Math.max(0, e.hp) / maxHp);
+        const scale = POWER_PROGRESS_MIN_SCALE + progressRatio * POWER_PROGRESS_SCALE_GAIN;
+        const visualR = e.r * scale;
         ctx.fillStyle = c;
         ctx.beginPath();
-        ctx.moveTo(e.x, e.y - e.r - POWER_UP_DIAMOND_OFFSET);
-        ctx.lineTo(e.x + e.r + POWER_UP_DIAMOND_OFFSET, e.y);
-        ctx.lineTo(e.x, e.y + e.r + POWER_UP_DIAMOND_OFFSET);
-        ctx.lineTo(e.x - e.r - POWER_UP_DIAMOND_OFFSET, e.y);
+        ctx.moveTo(e.x, e.y - visualR - POWER_UP_DIAMOND_OFFSET);
+        ctx.lineTo(e.x + visualR + POWER_UP_DIAMOND_OFFSET, e.y);
+        ctx.lineTo(e.x, e.y + visualR + POWER_UP_DIAMOND_OFFSET);
+        ctx.lineTo(e.x - visualR - POWER_UP_DIAMOND_OFFSET, e.y);
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 3;
         ctx.stroke();
+        const progressWidth = visualR * POWER_PROGRESS_BAR_WIDTH_MULTIPLIER;
+        const progressHeight = 6;
+        const barX = e.x - progressWidth * 0.5;
+        const barY = e.y + visualR + 12;
+        ctx.fillStyle = 'rgba(12, 18, 28, 0.8)';
+        ctx.fillRect(barX, barY, progressWidth, progressHeight);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(barX + 1, barY + 1, Math.max(0, (progressWidth - 2) * progressRatio), progressHeight - 2);
         ctx.fillStyle = '#1c2433';
         const icon = POWER_TYPE_ICONS[e.powerType];
         if (!icon) console.warn(`Unknown power type: ${e.powerType}. Valid types are: growth, shield, speed, role. Defaulting to ?.`);
