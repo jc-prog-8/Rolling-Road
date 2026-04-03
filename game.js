@@ -170,6 +170,13 @@
       step: 0.05,
       parse: (value) => Number.parseFloat(value)
     },
+    baseScroll: {
+      defaultValue: DEFAULT_BASE_SCROLL,
+      min: 120,
+      max: 520,
+      step: 5,
+      parse: (value) => Number.parseInt(value, 10)
+    },
     startingArmySize: {
       defaultValue: DEFAULT_STARTING_ARMY_SIZE,
       min: 1,
@@ -226,6 +233,27 @@
     }
   }
 
+  const SETUP_STORAGE_KEY = 'rollingRoad.setup_v1';
+
+  function saveSetupToStorage(values) {
+    try {
+      localStorage.setItem(SETUP_STORAGE_KEY, JSON.stringify(values));
+    } catch (e) {
+      // ignore storage errors (e.g., private mode)
+    }
+  }
+
+  function loadSetupFromStorage() {
+    try {
+      const raw = localStorage.getItem(SETUP_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function readSetupValues() {
     const values = {};
     for (const [paramName, cfg] of Object.entries(setupConfig)) {
@@ -240,6 +268,7 @@
   function applySetupValues(values) {
     RUN_DURATION_MINUTES = values.runDurationMinutes;
     LEVEL_DURATION = (RUN_DURATION_MINUTES * 60) / LEVEL_COUNT;
+    BASE_SCROLL = values.baseScroll;
     TARGET_ARMY_SIZE = values.targetArmySize;
     ENEMY_RATE_START = values.enemyRateStart;
     ENEMY_RATE_END = Math.max(values.enemyRateStart, values.enemyRateEnd);
@@ -269,10 +298,26 @@
     setupParameterBindings();
     if (!setupFormEl) return;
     statusEl.textContent = 'Adjust setup options, then tap Start Game.';
+    // Load saved setup values (if any) and apply to inputs
+    const saved = loadSetupFromStorage();
+    if (saved) {
+      for (const [paramName, cfg] of Object.entries(setupConfig)) {
+        const raw = saved[paramName];
+        const next = clampValue(cfg.parse(raw === undefined ? cfg.defaultValue : raw), cfg);
+        syncPair(paramName, next);
+      }
+    }
+
+    // Persist on any input change so users won't lose tweaks accidentally
+    setupFormEl.addEventListener('input', () => {
+      const current = readSetupValues();
+      saveSetupToStorage(current);
+    });
     setupFormEl.addEventListener('submit', (event) => {
       event.preventDefault();
       const setupValues = readSetupValues();
       applySetupValues(setupValues);
+      saveSetupToStorage(setupValues);
       if (setupScreenEl) setupScreenEl.classList.add('hidden');
     });
   }
