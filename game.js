@@ -238,12 +238,13 @@
 
   function enemyPressureMultiplier() {
     const powerRate = currentPowerSpawnRate();
-    return 1 + ((1 - powerRate) * ENEMY_PRESSURE_FROM_POWER_DROP);
+    const powerDropRatio = (POWER_SPAWN_RATE_START - powerRate) / POWER_SPAWN_RATE_START;
+    return 1 + (powerDropRatio * ENEMY_PRESSURE_FROM_POWER_DROP);
   }
 
   function queueVolley() {
-    const effectiveArmySize = Math.max(1, Math.floor(state.armySize));
-    const shotCount = effectiveArmySize === 1 ? SINGLE_UNIT_SHOT_COUNT : effectiveArmySize;
+    const clampedArmySize = Math.max(1, Math.floor(state.armySize));
+    const shotCount = clampedArmySize === 1 ? SINGLE_UNIT_SHOT_COUNT : clampedArmySize;
     const shotInterval = FIRE_INTERVAL_SECONDS / shotCount;
     const width = formationRangeX() * VOLLEY_WIDTH_MULTIPLIER;
     const offsets = [];
