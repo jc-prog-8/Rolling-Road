@@ -2,7 +2,6 @@
   const LEVEL_COUNT = 5;
   const LEVEL_DURATION = 240;
   const BASE_SCROLL = 260;
-  const GRACE_SECONDS = 2.8;
   const PLAYER_BOTTOM_PADDING = 170;
   const PLAYER_LATERAL_SPEED = 760;
   const KEYBOARD_MOVEMENT_DISTANCE = 180;
@@ -10,31 +9,23 @@
   const EXTRA_POWER_TIMING_OFFSET = 8.2;
   const BURST_ENEMY_TIMING_OFFSET = 7.8;
   const SPAWN_SEGMENT_LENGTH = 12;
-  const SPAWN_Y_OFFSET = 24;
-  const ENEMY_RADIUS = 72;
+  const ROAD_HORIZON_Y = 90;
+  const ROAD_TOP_MIN_X = 0.34;
+  const ROAD_TOP_SPAN_X = 0.32;
+  const ENEMY_WIDTH = 144;
+  const ENEMY_HEIGHT = 92;
   const POWER_UP_RADIUS = 72;
-  const BASE_ENEMY_HP = 1;
+  const BASE_ENEMY_HP = 2;
   const POWER_HITS_BASE = 3;
   const POWER_HITS_PER_LEVEL = 1;
   const ENEMY_HP_LEVEL_THRESHOLD = 2;
   const ENEMY_HP_LEVEL_BONUS = 1;
   const ENEMY_HP_FLANK_BONUS = 1;
-  const BASE_VOLLEY_COUNT = 1;
-  const MAX_VOLLEY_SIZE = 9;
-  const ARMY_VOLLEY_DIVISOR = 12;
-  const RANGED_VOLLEY_DIVISOR = 4;
   const MAX_EXTRA_SPAWN_PROBABILITY = 0.9;
-  const DENSITY_SPAWN_MULTIPLIER = 0.55;
-  const MIN_FIRE_INTERVAL = 0.14;
-  const BASE_FIRE_INTERVAL = 0.32;
-  const MAX_FIRE_REDUCTION = 0.16;
-  const RANGED_FIRE_COEFFICIENT = 0.006;
-  const MAX_PROJECTILE_SPREAD = 220;
-  const BASE_PROJECTILE_SPREAD = 70;
-  const SPREAD_PER_PROJECTILE = 22;
+  const DENSITY_SPAWN_MULTIPLIER = 0.7;
+  const FIRE_INTERVAL_SECONDS = 0.75;
   const BASE_PROJECTILE_SPEED = 600;
   const PROJECTILE_SPEED_PER_LEVEL = 35;
-  const PROJECTILE_SPEED_PER_RANGED_POINT = 6;
   const PROJECTILE_OFFSCREEN_THRESHOLD = -40;
   const POWER_PROGRESS_MIN_SCALE = 0.88;
   const POWER_PROGRESS_SCALE_GAIN = 0.22;
@@ -42,10 +33,10 @@
   const POWER_UP_DIAMOND_OFFSET = 3;
   const POWER_UP_ICON_Y_OFFSET = 1;
   const ENEMY_HOLD_LINE_OFFSET = 64;
-  const ENEMY_BREACH_TICK_SECONDS = 0.75;
+  const ENEMY_BREACH_TICK_SECONDS = 1;
   const ENTITY_CLEANUP_MARGIN = 120;
   const ARMY_BAR_MAX_UNITS = 180;
-  const POWER_TYPE_ICONS = { growth: '+', shield: 'S', speed: '>>', role: 'R' };
+  const POWER_TYPE_ICONS = { growth: '+' };
 
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
@@ -54,21 +45,15 @@
   const timeEl = document.getElementById('timeLabel');
   const armyEl = document.getElementById('armyLabel');
   const scoreEl = document.getElementById('scoreLabel');
-  const rolesEl = document.getElementById('rolesLabel');
 
   const state = {
     running: true,
+    victory: false,
     level: 0,
     timeInLevel: 0,
     totalTime: 0,
     score: 0,
-    speedBoostUntil: 0,
-    shieldUntil: 0,
-    checkpointTime: 0,
-    checkpointArmy: 0,
     armySize: 18,
-    role: { melee: 18, ranged: 0, support: 0 },
-    gracePool: [],
     touchTargetX: null,
     entities: [],
     projectiles: [],
@@ -92,14 +77,14 @@
       const segmentLength = SPAWN_SEGMENT_LENGTH;
       for (let seg = 0; seg < LEVEL_DURATION / segmentLength; seg++) {
         const baseT = seg * segmentLength;
-        const laneA = 0.18 + ((seg * 37 + i * 11) % 64) / 100;
-        const laneB = 0.18 + ((seg * 53 + i * 7 + 21) % 64) / 100;
-        const laneC = 0.18 + ((seg * 29 + i * 13 + 44) % 64) / 100;
+        const laneA = ROAD_TOP_MIN_X + ((seg * 37 + i * 11) % 18) / 100;
+        const laneB = ROAD_TOP_MIN_X + ((seg * 53 + i * 7 + 21) % 18) / 100;
+        const laneC = ROAD_TOP_MIN_X + ((seg * 29 + i * 13 + 44) % 18) / 100;
         let burstPattern = 'zigzag';
         let burstX = laneC;
         if (seg % 3 === 0) {
           burstPattern = 'flank';
-          burstX = seg % 2 === 0 ? 0.05 : 0.95;
+          burstX = seg % 2 === 0 ? ROAD_TOP_MIN_X : ROAD_TOP_MIN_X + ROAD_TOP_SPAN_X;
         }
 
         events.push({ t: baseT + 1, kind: 'enemy', pattern: 'straight', x: laneA });
@@ -109,22 +94,21 @@
         events.push({ t: baseT + BURST_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: burstPattern, x: burstX });
 
         if (seg % 2 === 1) {
-          events.push({ t: baseT + 7, kind: 'enemy', pattern: 'flank', x: seg % 4 === 1 ? 0.05 : 0.95 });
+          events.push({
+            t: baseT + 7, kind: 'enemy', pattern: 'flank', x: seg % 4 === 1 ? ROAD_TOP_MIN_X : ROAD_TOP_MIN_X + ROAD_TOP_SPAN_X
+          });
         }
         if (seg % 2 === 0) {
-          events.push({ t: baseT + EXTRA_POWER_TIMING_OFFSET, kind: 'power', p: seg % 4 === 0 ? 'shield' : 'speed', x: laneC });
+          events.push({ t: baseT + EXTRA_POWER_TIMING_OFFSET, kind: 'power', p: 'growth', x: laneC });
         }
         if (seg % 3 === 0) {
           events.push({ t: baseT + 9.5, kind: 'power', p: 'growth', x: laneA });
         }
         if (seg % 4 === 2) {
-          events.push({ t: baseT + 10.5, kind: 'power', p: 'shield', x: laneB });
+          events.push({ t: baseT + 10.5, kind: 'power', p: 'growth', x: laneB });
         }
         if (seg % 5 === 1) {
-          events.push({ t: baseT + 12, kind: 'power', p: 'speed', x: laneC });
-        }
-        if (seg % 4 === 0) {
-          events.push({ t: baseT + 14, kind: 'power', p: 'role', x: (laneA + laneC) * 0.5 });
+          events.push({ t: baseT + 12, kind: 'power', p: 'growth', x: laneC });
         }
       }
       defs.push({ speed: levelSpeed, density, events: events.sort((a, b) => a.t - b.t) });
@@ -133,15 +117,9 @@
   }
 
   state.levelDefs = createLevels();
-  primeGrace(state.armySize);
-
-  function primeGrace(count) {
-    const expiry = state.totalTime + GRACE_SECONDS;
-    for (let i = 0; i < count; i++) state.gracePool.push(expiry);
-  }
 
   function spawnEntity(ev) {
-    const y = -Math.max(ENEMY_RADIUS, POWER_UP_RADIUS) - SPAWN_Y_OFFSET;
+    const y = ROAD_HORIZON_Y + 6;
     const x = ev.x * canvas.width;
     const baseSpeed = currentSpeed() * (0.8 + Math.random() * 0.25);
 
@@ -153,7 +131,8 @@
         kind: 'enemy',
         x,
         y,
-        r: ENEMY_RADIUS,
+        w: ENEMY_WIDTH,
+        h: ENEMY_HEIGHT,
         hp,
         pattern: ev.pattern,
         phase: Math.random() * Math.PI * 2,
@@ -168,7 +147,7 @@
         kind: 'trap',
         x,
         y,
-        w: 74,
+        w: ENEMY_WIDTH,
         h: 24,
         pattern: ev.pattern,
         active: true,
@@ -195,133 +174,58 @@
     const levelDef = state.levelDefs[state.level];
     const milestoneBoost = Math.floor(state.score / 500) * 12;
     const progressBoost = (state.timeInLevel / LEVEL_DURATION) * 80;
-    const speedBoost = state.totalTime < state.speedBoostUntil ? 60 : 0;
-    return levelDef.speed + milestoneBoost + progressBoost + speedBoost;
+    return levelDef.speed + milestoneBoost + progressBoost;
   }
 
-  function projectileVolleySize() {
-    return Math.min(
-      MAX_VOLLEY_SIZE,
-      BASE_VOLLEY_COUNT + Math.floor(state.armySize / ARMY_VOLLEY_DIVISOR) + Math.floor(state.role.ranged / RANGED_VOLLEY_DIVISOR)
-    );
+  function formationHalfWidth() {
+    return 42 + Math.min(260, Math.sqrt(state.armySize) * 19);
   }
 
-  function projectileFireInterval() {
-    return Math.max(MIN_FIRE_INTERVAL, BASE_FIRE_INTERVAL - Math.min(MAX_FIRE_REDUCTION, state.role.ranged * RANGED_FIRE_COEFFICIENT));
+  function formationHalfHeight() {
+    return 24 + Math.min(90, Math.sqrt(state.armySize) * 8);
   }
 
   function fireProjectiles() {
-    const volley = projectileVolleySize();
-    const spread = Math.min(MAX_PROJECTILE_SPREAD, BASE_PROJECTILE_SPREAD + volley * SPREAD_PER_PROJECTILE);
-    for (let i = 0; i < volley; i++) {
-      const slot = volley === 1 ? 0.5 : i / (volley - 1);
-      const offset = (slot - 0.5) * spread;
+    const shotCount = Math.max(1, Math.floor(state.armySize));
+    const width = formationHalfWidth() * 2.4;
+    for (let i = 0; i < shotCount; i++) {
+      const slot = shotCount === 1 ? 0.5 : i / (shotCount - 1);
+      const offset = (slot - 0.5) * width;
       state.projectiles.push({
         x: state.playerX + offset,
-        y: state.playerY - 45,
+        y: state.playerY - formationHalfHeight() - 20,
         r: 5,
-        speed: BASE_PROJECTILE_SPEED + state.level * PROJECTILE_SPEED_PER_LEVEL + state.role.ranged * PROJECTILE_SPEED_PER_RANGED_POINT,
+        speed: BASE_PROJECTILE_SPEED + state.level * PROJECTILE_SPEED_PER_LEVEL,
       });
     }
   }
 
-  function removeExpiredGrace() {
-    state.gracePool = state.gracePool.filter((t) => t > state.totalTime);
-  }
-
-  function vulnerableUnits() {
-    removeExpiredGrace();
-    return Math.max(0, state.armySize - state.gracePool.length);
+  function endRun(reason) {
+    state.running = false;
+    state.victory = false;
+    statusEl.textContent = `${reason}. Final score: ${Math.floor(state.score)}`;
   }
 
   function loseUnits(count, reason) {
-    if (state.totalTime < state.shieldUntil) {
-      state.fx.push({ type: 'shield', x: state.playerX, y: state.playerY - 35, ttl: 0.32 });
-      return;
-    }
-    let remaining = count;
-
-    const vuln = vulnerableUnits();
-    const fromVulnerable = Math.min(vuln, remaining);
-    state.armySize -= fromVulnerable;
-    remaining -= fromVulnerable;
-
-    if (remaining > 0) {
-      state.armySize = Math.max(0, state.armySize - remaining);
-      state.gracePool.splice(0, remaining);
-    }
-
-    trimRoles();
+    state.armySize = Math.max(0, state.armySize - count);
     state.damageFlash = 0.18;
     state.fx.push({ type: 'loss', x: state.playerX + (Math.random() - 0.5) * 80, y: state.playerY - 20, ttl: 0.5 });
     statusEl.textContent = `${reason}: -${count} units`;
 
     if (state.armySize <= 0) {
-      recoverAtCheckpoint();
-    }
-  }
-
-  function trimRoles() {
-    let totalRoles = state.role.melee + state.role.ranged + state.role.support;
-    while (totalRoles > state.armySize) {
-      if (state.role.support > 0) state.role.support--;
-      else if (state.role.ranged > 0) state.role.ranged--;
-      else if (state.role.melee > 0) state.role.melee--;
-      totalRoles--;
+      endRun('Army wiped out');
     }
   }
 
   function addUnits(count) {
     state.armySize += count;
-    primeGrace(count);
-    state.role.melee += count;
   }
 
-  function applyPower(type) {
-    if (type === 'growth') {
-      const gain = 4 + Math.floor(Math.random() * 4);
-      addUnits(gain);
-      state.score += 90;
-      statusEl.textContent = `Growth pickup: +${gain} units`;
-    } else if (type === 'shield') {
-      state.shieldUntil = state.totalTime + 7;
-      state.score += 70;
-      statusEl.textContent = 'Shield active for 7s';
-    } else if (type === 'speed') {
-      state.speedBoostUntil = state.totalTime + 6;
-      state.score += 60;
-      statusEl.textContent = 'Speed boost active for 6s';
-    } else {
-      if (state.role.melee % 2 === 0) state.role.ranged += 3;
-      else state.role.support += 2;
-      addUnits(2);
-      state.score += 120;
-      statusEl.textContent = 'Role pickup: formation expanded';
-    }
-  }
-
-  function recoverAtCheckpoint() {
-    state.timeInLevel = state.checkpointTime;
-    state.armySize = Math.max(10, state.checkpointArmy || 12);
-    state.role = { melee: state.armySize, ranged: 0, support: 0 };
-    state.gracePool = [];
-    primeGrace(state.armySize);
-    state.entities = [];
-    state.projectiles = [];
-    state.fireTimer = 0;
-    state.fx.push({ type: 'respawn', x: state.playerX, y: state.playerY - 20, ttl: 1.1 });
-    statusEl.textContent = 'Army wiped. Respawned at checkpoint.';
-  }
-
-  function updateCheckpoint() {
-    const p = state.timeInLevel / LEVEL_DURATION;
-    const next = p >= 0.75 ? 0.75 : p >= 0.5 ? 0.5 : p >= 0.25 ? 0.25 : 0;
-    const targetTime = next * LEVEL_DURATION;
-    if (targetTime > state.checkpointTime) {
-      state.checkpointTime = targetTime;
-      state.checkpointArmy = state.armySize;
-      statusEl.textContent = `Checkpoint ${Math.round(next * 100)}% reached`;
-    }
+  function applyPower() {
+    const gain = 2 + Math.floor(Math.random() * 3);
+    addUnits(gain);
+    state.score += 90;
+    statusEl.textContent = `Growth pickup: +${gain} units`;
   }
 
   function overlapsCircleRect(cx, cy, cr, rx, ry, rw, rh) {
@@ -330,10 +234,6 @@
     const dx = cx - nx;
     const dy = cy - ny;
     return dx * dx + dy * dy <= cr * cr;
-  }
-
-  function formationRadius() {
-    return 20 + Math.min(66, Math.sqrt(state.armySize) * 8);
   }
 
   function anchorEnemy(enemy, holdY) {
@@ -381,40 +281,40 @@
 
     const px = state.playerX;
     const py = state.playerY;
-    const pr = formationRadius();
+    const formationW = formationHalfWidth();
+    const formationH = formationHalfHeight();
 
     state.entities = state.entities.filter((e) => {
       if (e.kind !== 'enemy' && e.y > canvas.height + ENTITY_CLEANUP_MARGIN) return false;
       if (
         e.kind === 'enemy'
-        && (e.x < -ENTITY_CLEANUP_MARGIN - e.r || e.x > canvas.width + ENTITY_CLEANUP_MARGIN + e.r)
+        && (e.x < -ENTITY_CLEANUP_MARGIN - e.w || e.x > canvas.width + ENTITY_CLEANUP_MARGIN + e.w)
       ) return false;
 
       if (e.kind === 'enemy') {
-        const dx = e.x - px;
-        const dy = e.y - (py - 30);
-        if (dx * dx + dy * dy < (e.r + pr) ** 2) {
+        const nx = (e.x - px) / (formationW + e.w * 0.5);
+        const ny = (e.y - (py - 30)) / (formationH + e.h * 0.5);
+        if (nx * nx + ny * ny < 1) {
           anchorEnemyIfNeeded(e, enemyHoldY);
-          const supportShield = Math.min(3, Math.floor(state.role.support / 3));
           if (state.totalTime >= (e.nextDamageAt || 0)) {
-            loseUnits(Math.max(1, 3 - supportShield), 'Enemy hit');
+            loseUnits(1, 'Enemy hit');
             e.nextDamageAt = state.totalTime + ENEMY_BREACH_TICK_SECONDS;
             if (!e.breachedScoreAwarded) {
-              state.score += 10 + state.role.ranged;
+              state.score += 10;
               e.breachedScoreAwarded = true;
             }
           }
           return true;
         }
       } else if (e.kind === 'trap') {
-        if (e.active && overlapsCircleRect(px, py - 20, pr, e.x - e.w * 0.5, e.y - e.h * 0.5, e.w, e.h)) {
+        if (e.active && overlapsCircleRect(px, py - 20, formationW, e.x - e.w * 0.5, e.y - e.h * 0.5, e.w, e.h)) {
           loseUnits(2, 'Trap hit');
           return false;
         }
       } else {
-        const dx = e.x - px;
-        const dy = e.y - py;
-        if (dx * dx + dy * dy < (e.r + pr) ** 2) return true;
+        const nx = (e.x - px) / (e.r + formationW);
+        const ny = (e.y - py) / (e.r + formationH);
+        if (nx * nx + ny * ny < 1) return true;
       }
       return true;
     });
@@ -429,9 +329,11 @@
       if (p.y < PROJECTILE_OFFSCREEN_THRESHOLD) continue;
       for (const e of state.entities) {
         if (e.kind !== 'enemy' && e.kind !== 'power') continue;
-        const dx = e.x - p.x;
-        const dy = e.y - p.y;
-        if (dx * dx + dy * dy <= (e.r + p.r) ** 2) {
+        const rx = e.kind === 'enemy' ? (e.w * 0.5 + p.r) : (e.r + p.r);
+        const ry = e.kind === 'enemy' ? (e.h * 0.5 + p.r) : (e.r + p.r);
+        const nx = (e.x - p.x) / rx;
+        const ny = (e.y - p.y) / ry;
+        if (nx * nx + ny * ny <= 1) {
           p.destroyed = true;
           if (e.kind === 'power') {
             e.hp -= 1;
@@ -464,7 +366,7 @@
       const ev = def.events.shift();
       spawnEntity(ev);
       if (Math.random() < Math.min(MAX_EXTRA_SPAWN_PROBABILITY, DENSITY_SPAWN_MULTIPLIER * def.density)) {
-        spawnEntity({ t: ev.t, kind: 'enemy', pattern: 'straight', x: Math.random() * 0.84 + 0.08 });
+        spawnEntity({ t: ev.t, kind: 'enemy', pattern: 'straight', x: ROAD_TOP_MIN_X + Math.random() * ROAD_TOP_SPAN_X });
       }
     }
   }
@@ -473,12 +375,11 @@
     state.level += 1;
     if (state.level >= LEVEL_COUNT) {
       state.running = false;
+      state.victory = true;
       statusEl.textContent = `Victory! Final score: ${state.score}`;
       return;
     }
     state.timeInLevel = 0;
-    state.checkpointTime = 0;
-    state.checkpointArmy = state.armySize;
     state.entities = [];
     state.projectiles = [];
     state.levelDefs[state.level] = createLevels()[state.level];
@@ -490,7 +391,7 @@
 
     state.totalTime += dt;
     state.timeInLevel += dt;
-    state.score += dt * (8 + state.role.ranged * 0.8);
+    state.score += dt * 8;
 
     if (state.touchTargetX !== null) {
       const delta = state.touchTargetX - state.playerX;
@@ -506,13 +407,12 @@
     spawnFromTimeline();
     updateEntities(dt);
     state.fireTimer -= dt;
-    const fireInterval = projectileFireInterval();
+    const fireInterval = FIRE_INTERVAL_SECONDS;
     while (state.fireTimer <= 0) {
       fireProjectiles();
       state.fireTimer += fireInterval;
     }
     updateProjectiles(dt);
-    updateCheckpoint();
 
     if (state.timeInLevel >= LEVEL_DURATION) nextLevel();
 
@@ -546,11 +446,9 @@
     const roadTopWidth = w * 0.32;
     const roadBottomWidth = w * 0.92;
     const roadCenter = w * 0.5;
-    const horizonY = 90;
-
     ctx.beginPath();
-    ctx.moveTo(roadCenter - roadTopWidth * 0.5, horizonY);
-    ctx.lineTo(roadCenter + roadTopWidth * 0.5, horizonY);
+    ctx.moveTo(roadCenter - roadTopWidth * 0.5, ROAD_HORIZON_Y);
+    ctx.lineTo(roadCenter + roadTopWidth * 0.5, ROAD_HORIZON_Y);
     ctx.lineTo(roadCenter + roadBottomWidth * 0.5, h);
     ctx.lineTo(roadCenter - roadBottomWidth * 0.5, h);
     ctx.closePath();
@@ -565,7 +463,7 @@
     const stripeLen = 26;
     const base = state.roadOffset % stripeGap;
     for (let y = -stripeGap + base; y < h; y += stripeGap) {
-      const t = (y - horizonY) / (h - horizonY);
+      const t = (y - ROAD_HORIZON_Y) / (h - ROAD_HORIZON_Y);
       const x = roadCenter;
       const widthScale = Math.max(0.1, t);
       ctx.strokeStyle = '#a8b8d7';
@@ -578,34 +476,26 @@
   }
 
   function drawArmy() {
-    const r = formationRadius();
+    const w = formationHalfWidth();
+    const h = formationHalfHeight();
     const count = Math.min(state.armySize, 90);
 
     for (let i = 0; i < count; i++) {
       const a = (i / Math.max(1, count)) * Math.PI * 2;
       const ring = 0.35 + ((i % 7) / 7) * 0.9;
-      const ux = state.playerX + Math.cos(a) * r * ring * 0.75;
-      const uy = state.playerY + Math.sin(a) * r * ring * 0.55;
+      const ux = state.playerX + Math.cos(a) * w * ring * 0.8;
+      const uy = state.playerY + Math.sin(a) * h * ring * 0.9;
 
-      const protectedUnit = i < state.gracePool.length;
-      ctx.fillStyle = protectedUnit ? '#8fe4ff' : '#f3fbff';
+      ctx.fillStyle = '#f3fbff';
       ctx.beginPath();
       ctx.arc(ux, uy, 4, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    if (state.totalTime < state.shieldUntil) {
-      ctx.strokeStyle = '#8fd8ff';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(state.playerX, state.playerY, r + 8, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
     ctx.fillStyle = '#6da4d8';
-    ctx.fillRect(state.playerX - 8, state.playerY - r - 26, 16, 18);
+    ctx.fillRect(state.playerX - 8, state.playerY - h - 26, 16, 18);
     ctx.fillStyle = '#b9dbff';
-    ctx.fillRect(state.playerX - 3, state.playerY - r - 36, 6, 10);
+    ctx.fillRect(state.playerX - 3, state.playerY - h - 36, 6, 10);
   }
 
   function drawArmyBar() {
@@ -647,7 +537,7 @@
       if (e.kind === 'enemy') {
         ctx.fillStyle = e.pattern === 'flank' ? '#ff9c6f' : e.pattern === 'zigzag' ? '#ff7a91' : '#ff5d5d';
         ctx.beginPath();
-        ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+        ctx.ellipse(e.x, e.y, e.w * 0.5, e.h * 0.5, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = '#4d1414';
         ctx.lineWidth = 3;
@@ -668,7 +558,7 @@
           ctx.fill();
         }
       } else {
-        const c = e.powerType === 'growth' ? '#7cff6b' : e.powerType === 'shield' ? '#6bd4ff' : e.powerType === 'speed' ? '#ffd56b' : '#d499ff';
+        const c = '#7cff6b';
         const maxHp = POWER_HITS_BASE + state.level * POWER_HITS_PER_LEVEL;
         const progressRatio = 1 - (Math.max(0, e.hp) / maxHp);
         const scale = POWER_PROGRESS_MIN_SCALE + progressRatio * POWER_PROGRESS_SCALE_GAIN;
@@ -693,7 +583,7 @@
         ctx.fillRect(barX + 1, barY + 1, Math.max(0, (progressWidth - 2) * progressRatio), progressHeight - 2);
         ctx.fillStyle = '#1c2433';
         const icon = POWER_TYPE_ICONS[e.powerType];
-        if (!icon) console.warn(`Unknown power type: ${e.powerType}. Valid types are: growth, shield, speed, role. Defaulting to ?.`);
+        if (!icon) console.warn(`Unknown power type: ${e.powerType}. Valid types are: growth. Defaulting to ?.`);
         ctx.font = 'bold 14px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -717,7 +607,7 @@
         ctx.beginPath();
         ctx.arc(f.x, f.y, 22 * (1.4 - f.ttl), 0, Math.PI * 2);
         ctx.fill();
-      } else if (f.type === 'shield' || f.type === 'respawn' || f.type === 'hit') {
+      } else if (f.type === 'hit') {
         ctx.strokeStyle = `rgba(130, 220, 255, ${alpha})`;
         ctx.lineWidth = 3;
         ctx.beginPath();
@@ -746,7 +636,7 @@
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 48px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('All Levels Complete', canvas.width * 0.5, canvas.height * 0.46);
+      ctx.fillText(state.victory ? 'All Levels Complete' : 'Army Defeated', canvas.width * 0.5, canvas.height * 0.46);
       ctx.font = '28px sans-serif';
       ctx.fillText(`Final Score: ${Math.floor(state.score)}`, canvas.width * 0.5, canvas.height * 0.54);
     }
@@ -759,7 +649,6 @@
     timeEl.textContent = `${mins}:${secs}`;
     armyEl.textContent = `${state.armySize}`;
     scoreEl.textContent = `${Math.floor(state.score)}`;
-    rolesEl.textContent = `M:${state.role.melee} R:${state.role.ranged} S:${state.role.support}`;
   }
 
   function pointerX(evt) {

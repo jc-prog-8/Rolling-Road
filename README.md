@@ -25,7 +25,7 @@ This repository is static-site ready. Ensure GitHub Pages is configured to serve
 - Each level targets ~4 minutes of run time
 - Lateral army steering with automatic forward world scrolling
 - Enemies (straight/zig-zag/flank), traps (static/timed), and power-ups
-- Army growth, roles (melee/ranged/support), checkpoint respawns, and new-unit grace invulnerability
+- Army growth power-ups and widening army/projectile formations as army size increases
 - Parallax/perspective visuals with hit/pickup feedback
 - Touch controls optimized for iPhone and iPad browsers
 
@@ -33,8 +33,7 @@ This repository is static-site ready. Ensure GitHub Pages is configured to serve
 
 Perform full end-to-end play testing by running the game in a browser and completing all 5 levels while verifying:
 
-1. Checkpoint respawn behavior
-2. Enemy/trap collisions and unit-loss feedback
-3. Power-up effects and temporary buffs
-4. Progressive difficulty and level transitions
-5. Stable touch steering on iPhone/iPad Safari
+1. Enemy/trap collisions and unit-loss feedback
+2. Army-growth power-up behavior and wider firing spread as army size increases
+3. Progressive difficulty and level transitions
+4. Stable touch steering on iPhone/iPad Safari
