@@ -7,7 +7,7 @@
   const EXTRA_ENEMY_TIMING_OFFSET = 2.2;
   const EXTRA_POWER_TIMING_OFFSET = 8.2;
   const BURST_ENEMY_TIMING_OFFSET = 7.8;
-  const EXTRA_SEGMENT_ENEMY_TIMING = 9;
+  const EXTRA_SEGMENT_ENEMY_TIMING_OFFSET = 9;
   const SPAWN_SEGMENT_LENGTH = 12;
   const ROAD_HORIZON_Y = 90;
   const ROAD_TOP_MIN_X = 0.34;
@@ -41,6 +41,8 @@
   const POWER_UP_SPEED_MULTIPLIER = 0.58;
   const ARMY_SQUARE_MIN_RADIUS = 20;
   const ARMY_SQUARE_SIZE_RATIO = 0.92;
+  const ROAD_TOP_WIDTH_RATIO = 0.78;
+  const ROAD_BOTTOM_WIDTH_RATIO = 1;
   const ENEMY_HOLD_LINE_OFFSET = 64;
   const ENEMY_BREACH_TICK_SECONDS = 1;
   const ENTITY_CLEANUP_MARGIN = 120;
@@ -76,7 +78,7 @@
     playerY: canvas.height - PLAYER_BOTTOM_PADDING,
     fireTimer: 0,
     shotStaggerTimer: 0,
-    pendingShotOffsets: [],
+    shotOffsetQueue: [],
     pointerActive: false,
     levelDefs: []
   };
@@ -106,7 +108,7 @@
         events.push({ t: baseT + 3.5, kind: 'trap', pattern: seg % 3 === 0 ? 'timed' : 'static', x: laneB });
         events.push({ t: baseT + 5, kind: 'enemy', pattern: isEvenSeg ? 'zigzag' : 'straight', x: laneC });
         events.push({ t: baseT + BURST_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: burstPattern, x: burstX });
-        events.push({ t: baseT + EXTRA_SEGMENT_ENEMY_TIMING, kind: 'enemy', pattern: isEvenSeg ? 'straight' : 'zigzag', x: isEvenSeg ? laneA : laneB });
+        events.push({ t: baseT + EXTRA_SEGMENT_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: isEvenSeg ? 'straight' : 'zigzag', x: isEvenSeg ? laneA : laneB });
 
         if (seg % 2 === 1) {
           events.push({
@@ -166,7 +168,6 @@
         h: 24,
         pattern: ev.pattern,
         active: true,
-        timer: 0,
         speed: currentSpeed() * 0.95,
       });
       return;
@@ -206,7 +207,7 @@
     for (let i = 0; i < shotCount; i++) {
       const slot = shotCount === 1 ? 0.5 : i / (shotCount - 1);
       const offset = (slot - 0.5) * width;
-      state.pendingShotOffsets.push(offset);
+      state.shotOffsetQueue.push(offset);
     }
   }
 
@@ -221,8 +222,8 @@
 
   function fireProjectiles(dt) {
     state.shotStaggerTimer -= dt;
-    while (state.pendingShotOffsets.length && state.shotStaggerTimer <= 0) {
-      const offset = state.pendingShotOffsets.shift();
+    while (state.shotOffsetQueue.length && state.shotStaggerTimer <= 0) {
+      const offset = state.shotOffsetQueue.shift();
       fireQueuedShot(offset);
       state.shotStaggerTimer += SHOT_STAGGER_SECONDS;
     }
@@ -519,8 +520,8 @@
       }
     }
 
-    const roadTopWidth = w * 0.78;
-    const roadBottomWidth = w;
+    const roadTopWidth = w * ROAD_TOP_WIDTH_RATIO;
+    const roadBottomWidth = w * ROAD_BOTTOM_WIDTH_RATIO;
     const roadCenter = w * 0.5;
     ctx.beginPath();
     ctx.moveTo(roadCenter - roadTopWidth * 0.5, ROAD_HORIZON_Y);
@@ -556,14 +557,14 @@
     const h = formationRangeY();
     const count = Math.min(state.armySize, 90);
 
-    const sideCount = Math.max(1, Math.ceil(Math.sqrt(count)));
+    const dotsPerSide = Math.max(1, Math.ceil(Math.sqrt(count)));
     const maxSquareRadius = Math.max(ARMY_SQUARE_MIN_RADIUS, Math.min(w, h) * ARMY_SQUARE_SIZE_RATIO);
-    const spacing = sideCount > 1 ? (maxSquareRadius * 2) / (sideCount - 1) : 0;
-    const originOffset = (sideCount - 1) * spacing * 0.5;
+    const spacing = dotsPerSide > 1 ? (maxSquareRadius * 2) / (dotsPerSide - 1) : 0;
+    const originOffset = (dotsPerSide - 1) * spacing * 0.5;
 
     for (let i = 0; i < count; i++) {
-      const row = Math.floor(i / sideCount);
-      const col = i % sideCount;
+      const row = Math.floor(i / dotsPerSide);
+      const col = i % dotsPerSide;
       const ux = state.playerX - originOffset + col * spacing;
       const uy = state.playerY - originOffset + row * spacing;
 
