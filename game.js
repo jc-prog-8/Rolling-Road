@@ -3,7 +3,7 @@
   const LEVEL_DURATION = 240;
   const BASE_SCROLL = 260;
   const PLAYER_BOTTOM_PADDING = 170;
-  const KEYBOARD_MOVEMENT_DISTANCE = 180;
+  const KEYBOARD_MOVEMENT_STEP = 180;
   const EXTRA_ENEMY_TIMING_OFFSET = 2.2;
   const EXTRA_POWER_TIMING_OFFSET = 8.2;
   const BURST_ENEMY_TIMING_OFFSET = 7.8;
@@ -93,6 +93,7 @@
       for (let seg = 0; seg < LEVEL_DURATION / segmentLength; seg++) {
         const baseT = seg * segmentLength;
         const isEvenSeg = seg % 2 === 0;
+        const isOddSeg = !isEvenSeg;
         const laneA = ROAD_TOP_MIN_X + ((seg * 37 + i * 11) % ROAD_TOP_LANE_STEPS) / 100;
         const laneB = ROAD_TOP_MIN_X + ((seg * 53 + i * 7 + 21) % ROAD_TOP_LANE_STEPS) / 100;
         const laneC = ROAD_TOP_MIN_X + ((seg * 29 + i * 13 + 44) % ROAD_TOP_LANE_STEPS) / 100;
@@ -110,7 +111,7 @@
         events.push({ t: baseT + BURST_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: burstPattern, x: burstX });
         events.push({ t: baseT + EXTRA_SEGMENT_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: isEvenSeg ? 'straight' : 'zigzag', x: isEvenSeg ? laneA : laneB });
 
-        if (seg % 2 === 1) {
+        if (isOddSeg) {
           events.push({
             t: baseT + 7, kind: 'enemy', pattern: 'flank', x: seg % 4 === 1 ? ROAD_TOP_MIN_X : ROAD_TOP_MIN_X + ROAD_TOP_SPAN_X
           });
@@ -237,11 +238,11 @@
 
   function updatePlayerFromKeyboard(e) {
     if (e.key === 'ArrowLeft') {
-      state.playerX -= KEYBOARD_MOVEMENT_DISTANCE;
+      state.playerX -= KEYBOARD_MOVEMENT_STEP;
       state.touchTargetX = null;
     }
     if (e.key === 'ArrowRight') {
-      state.playerX += KEYBOARD_MOVEMENT_DISTANCE;
+      state.playerX += KEYBOARD_MOVEMENT_STEP;
       state.touchTargetX = null;
     }
   }
@@ -380,7 +381,6 @@
         }
       } else if (e.kind === 'trap') {
         e.y += e.speed * dt;
-        if (e.pattern === 'timed') e.active = true;
       } else {
         e.y += e.speed * dt;
       }
@@ -558,8 +558,8 @@
     const count = Math.min(state.armySize, 90);
 
     const dotsPerSide = Math.max(1, Math.ceil(Math.sqrt(count)));
-    const maxSquareRadius = Math.max(ARMY_SQUARE_MIN_RADIUS, Math.min(w, h) * ARMY_SQUARE_SIZE_RATIO);
-    const spacing = dotsPerSide > 1 ? (maxSquareRadius * 2) / (dotsPerSide - 1) : 0;
+    const halfSquareSide = Math.max(ARMY_SQUARE_MIN_RADIUS, Math.min(w, h) * ARMY_SQUARE_SIZE_RATIO);
+    const spacing = dotsPerSide > 1 ? (halfSquareSide * 2) / (dotsPerSide - 1) : 0;
     const originOffset = (dotsPerSide - 1) * spacing * 0.5;
 
     for (let i = 0; i < count; i++) {
