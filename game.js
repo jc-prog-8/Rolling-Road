@@ -3,6 +3,8 @@
   const LEVEL_DURATION = 240;
   const BASE_SCROLL = 260;
   const GRACE_SECONDS = 2.8;
+  const PLAYER_BOTTOM_PADDING = 170;
+  const PLAYER_LATERAL_SPEED = 760;
 
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
@@ -28,12 +30,15 @@
     gracePool: [],
     touchTargetX: null,
     entities: [],
+    projectiles: [],
     fx: [],
     damageFlash: 0,
     bgOffset: 0,
     roadOffset: 0,
     playerX: canvas.width * 0.5,
-    playerY: canvas.height - 120,
+    playerY: canvas.height - PLAYER_BOTTOM_PADDING,
+    fireTimer: 0,
+    pointerActive: false,
     levelDefs: []
   };
 
@@ -89,12 +94,13 @@
     const baseSpeed = currentSpeed() * (0.8 + Math.random() * 0.25);
 
     if (ev.kind === 'enemy') {
+      const hp = 1 + (state.level >= 2 ? 1 : 0) + (ev.pattern === 'flank' ? 1 : 0);
       state.entities.push({
         kind: 'enemy',
         x,
         y,
         r: 18,
-        hp: 1,
+        hp,
         pattern: ev.pattern,
         phase: Math.random() * Math.PI * 2,
         vx: 0,
@@ -136,6 +142,29 @@
     const progressBoost = (state.timeInLevel / LEVEL_DURATION) * 80;
     const speedBoost = state.totalTime < state.speedBoostUntil ? 60 : 0;
     return levelDef.speed + milestoneBoost + progressBoost + speedBoost;
+  }
+
+  function projectileVolleySize() {
+    return Math.min(9, 1 + Math.floor(state.armySize / 12) + Math.floor(state.role.ranged / 4));
+  }
+
+  function projectileFireInterval() {
+    return Math.max(0.14, 0.32 - Math.min(0.16, state.role.ranged * 0.006));
+  }
+
+  function fireProjectiles() {
+    const volley = projectileVolleySize();
+    const spread = Math.min(220, 70 + volley * 22);
+    for (let i = 0; i < volley; i++) {
+      const slot = volley === 1 ? 0.5 : i / (volley - 1);
+      const offset = (slot - 0.5) * spread;
+      state.projectiles.push({
+        x: state.playerX + offset,
+        y: state.playerY - 45,
+        r: 5,
+        speed: 620 + state.level * 35 + state.role.ranged * 6,
+      });
+    }
   }
 
   function removeExpiredGrace() {
@@ -220,6 +249,8 @@
     state.gracePool = [];
     primeGrace(state.armySize);
     state.entities = [];
+    state.projectiles = [];
+    state.fireTimer = 0;
     state.fx.push({ type: 'respawn', x: state.playerX, y: state.playerY - 20, ttl: 1.1 });
     statusEl.textContent = 'Army wiped. Respawned at checkpoint.';
   }
@@ -303,12 +334,40 @@
     });
   }
 
+  function updateProjectiles(dt) {
+    for (const p of state.projectiles) {
+      p.y -= p.speed * dt;
+    }
+
+    for (const p of state.projectiles) {
+      if (p.y < -40) continue;
+      for (const e of state.entities) {
+        if (e.kind !== 'enemy') continue;
+        const dx = e.x - p.x;
+        const dy = e.y - p.y;
+        if (dx * dx + dy * dy <= (e.r + p.r) ** 2) {
+          e.hp -= 1;
+          p.y = -1000;
+          state.fx.push({ type: 'hit', x: e.x, y: e.y, ttl: 0.2 });
+          if (e.hp <= 0) {
+            e.y = canvas.height + 1000;
+            state.score += 22 + state.level * 3;
+          }
+          break;
+        }
+      }
+    }
+
+    state.entities = state.entities.filter((e) => !(e.kind === 'enemy' && e.hp <= 0));
+    state.projectiles = state.projectiles.filter((p) => p.y > -40);
+  }
+
   function spawnFromTimeline() {
     const def = state.levelDefs[state.level];
     while (def.events.length && def.events[0].t <= state.timeInLevel) {
       const ev = def.events.shift();
       spawnEntity(ev);
-      if (Math.random() < 0.18 * def.density) {
+      if (Math.random() < Math.min(0.58, 0.28 * def.density)) {
         spawnEntity({ t: ev.t, kind: 'enemy', pattern: 'straight', x: Math.random() * 0.84 + 0.08 });
       }
     }
@@ -325,6 +384,7 @@
     state.checkpointTime = 0;
     state.checkpointArmy = state.armySize;
     state.entities = [];
+    state.projectiles = [];
     state.levelDefs[state.level] = createLevels()[state.level];
     statusEl.textContent = `Level ${state.level + 1} start`;
   }
@@ -338,7 +398,7 @@
 
     if (state.touchTargetX !== null) {
       const delta = state.touchTargetX - state.playerX;
-      state.playerX += Math.sign(delta) * Math.min(Math.abs(delta), dt * 520);
+      state.playerX += Math.sign(delta) * Math.min(Math.abs(delta), dt * PLAYER_LATERAL_SPEED);
     }
 
     const margin = 85;
@@ -349,6 +409,13 @@
 
     spawnFromTimeline();
     updateEntities(dt);
+    state.fireTimer -= dt;
+    const fireInterval = projectileFireInterval();
+    while (state.fireTimer <= 0) {
+      fireProjectiles();
+      state.fireTimer += fireInterval;
+    }
+    updateProjectiles(dt);
     updateCheckpoint();
 
     if (state.timeInLevel >= LEVEL_DURATION) nextLevel();
@@ -445,12 +512,34 @@
     ctx.fillRect(state.playerX - 3, state.playerY - r - 36, 6, 10);
   }
 
+  function drawProjectiles() {
+    for (const p of state.projectiles) {
+      ctx.fillStyle = '#c8f1ff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#4cbfff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y + 8);
+      ctx.lineTo(p.x, p.y - 12);
+      ctx.stroke();
+    }
+  }
+
   function drawEntities() {
     for (const e of state.entities) {
       if (e.kind === 'enemy') {
         ctx.fillStyle = e.pattern === 'flank' ? '#ff9c6f' : e.pattern === 'zigzag' ? '#ff7a91' : '#ff5d5d';
         ctx.beginPath();
         ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#4d1414';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.fillStyle = '#2a0e0e';
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, 5, 0, Math.PI * 2);
         ctx.fill();
       } else if (e.kind === 'trap') {
         ctx.fillStyle = e.active ? '#d4d4d4' : '#707070';
@@ -467,11 +556,21 @@
         const c = e.powerType === 'growth' ? '#7cff6b' : e.powerType === 'shield' ? '#6bd4ff' : e.powerType === 'speed' ? '#ffd56b' : '#d499ff';
         ctx.fillStyle = c;
         ctx.beginPath();
-        ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+        ctx.moveTo(e.x, e.y - e.r - 3);
+        ctx.lineTo(e.x + e.r + 3, e.y);
+        ctx.lineTo(e.x, e.y + e.r + 3);
+        ctx.lineTo(e.x - e.r - 3, e.y);
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.stroke();
+        ctx.fillStyle = '#1c2433';
+        const icon = e.powerType === 'growth' ? '+' : e.powerType === 'shield' ? 'S' : e.powerType === 'speed' ? '>>' : 'R';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(icon, e.x, e.y + 1);
+        ctx.textBaseline = 'alphabetic';
       }
     }
   }
@@ -489,7 +588,7 @@
         ctx.beginPath();
         ctx.arc(f.x, f.y, 22 * (1.4 - f.ttl), 0, Math.PI * 2);
         ctx.fill();
-      } else if (f.type === 'shield' || f.type === 'respawn') {
+      } else if (f.type === 'shield' || f.type === 'respawn' || f.type === 'hit') {
         ctx.strokeStyle = `rgba(130, 220, 255, ${alpha})`;
         ctx.lineWidth = 3;
         ctx.beginPath();
@@ -507,6 +606,7 @@
   function draw() {
     drawParallax();
     drawEntities();
+    drawProjectiles();
     drawArmy();
     drawFx();
 
@@ -544,16 +644,24 @@
       e.preventDefault();
     };
 
-    canvas.addEventListener('pointerdown', set, { passive: false });
+    canvas.addEventListener('pointerdown', (e) => {
+      state.pointerActive = true;
+      set(e);
+    }, { passive: false });
     canvas.addEventListener('pointermove', (e) => {
-      if (e.pressure > 0 || e.buttons > 0) set(e);
+      if (state.pointerActive || e.pressure > 0 || e.buttons > 0) set(e);
     }, { passive: false });
     canvas.addEventListener('pointerup', () => {
+      state.pointerActive = false;
+      state.touchTargetX = null;
+    });
+    canvas.addEventListener('pointercancel', () => {
+      state.pointerActive = false;
       state.touchTargetX = null;
     });
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowLeft') state.touchTargetX = state.playerX - 130;
-      if (e.key === 'ArrowRight') state.touchTargetX = state.playerX + 130;
+      if (e.key === 'ArrowLeft') state.touchTargetX = state.playerX - 180;
+      if (e.key === 'ArrowRight') state.touchTargetX = state.playerX + 180;
     });
   }
 
