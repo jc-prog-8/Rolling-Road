@@ -6,6 +6,8 @@
   const PLAYER_BOTTOM_PADDING = 170;
   const PLAYER_LATERAL_SPEED = 760;
   const KEYBOARD_MOVEMENT_DISTANCE = 180;
+  const EXTRA_ENEMY_TIMING_OFFSET = 2.2;
+  const EXTRA_POWER_TIMING_OFFSET = 8.2;
   const BASE_ENEMY_HP = 1;
   const POWER_HITS_BASE = 3;
   const POWER_HITS_PER_LEVEL = 1;
@@ -86,7 +88,7 @@
         const laneC = 0.18 + ((seg * 29 + i * 13 + 44) % 64) / 100;
 
         events.push({ t: baseT + 1, kind: 'enemy', pattern: 'straight', x: laneA });
-        events.push({ t: baseT + 2.2, kind: 'enemy', pattern: 'straight', x: laneB });
+        events.push({ t: baseT + EXTRA_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: 'straight', x: laneB });
         events.push({ t: baseT + 3.5, kind: 'trap', pattern: seg % 3 === 0 ? 'timed' : 'static', x: laneB });
         events.push({ t: baseT + 5, kind: 'enemy', pattern: seg % 2 === 0 ? 'zigzag' : 'straight', x: laneC });
 
@@ -94,7 +96,7 @@
           events.push({ t: baseT + 7, kind: 'enemy', pattern: 'flank', x: seg % 4 === 1 ? 0.05 : 0.95 });
         }
         if (seg % 2 === 0) {
-          events.push({ t: baseT + 8.2, kind: 'power', p: seg % 4 === 0 ? 'shield' : 'speed', x: laneC });
+          events.push({ t: baseT + EXTRA_POWER_TIMING_OFFSET, kind: 'power', p: seg % 4 === 0 ? 'shield' : 'speed', x: laneC });
         }
         if (seg % 3 === 0) {
           events.push({ t: baseT + 9.5, kind: 'power', p: 'growth', x: laneA });
@@ -364,11 +366,7 @@
       } else {
         const dx = e.x - px;
         const dy = e.y - py;
-        if (dx * dx + dy * dy < (e.r + pr) ** 2) {
-          loseUnits(1, 'Power-up collision');
-          e.destroyed = true;
-          return false;
-        }
+        if (dx * dx + dy * dy < (e.r + pr) ** 2) return true;
       }
       return true;
     });
@@ -605,8 +603,8 @@
       } else {
         const c = e.powerType === 'growth' ? '#7cff6b' : e.powerType === 'shield' ? '#6bd4ff' : e.powerType === 'speed' ? '#ffd56b' : '#d499ff';
         const maxHp = POWER_HITS_BASE + state.level * POWER_HITS_PER_LEVEL;
-        const completion = 1 - (Math.max(0, e.hp) / maxHp);
-        const scale = POWER_PROGRESS_MIN_SCALE + completion * POWER_PROGRESS_SCALE_GAIN;
+        const progressRatio = 1 - (Math.max(0, e.hp) / maxHp);
+        const scale = POWER_PROGRESS_MIN_SCALE + progressRatio * POWER_PROGRESS_SCALE_GAIN;
         const visualR = e.r * scale;
         ctx.fillStyle = c;
         ctx.beginPath();
@@ -625,7 +623,7 @@
         ctx.fillStyle = 'rgba(12, 18, 28, 0.8)';
         ctx.fillRect(barX, barY, progressWidth, progressHeight);
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(barX + 1, barY + 1, Math.max(0, (progressWidth - 2) * completion), progressHeight - 2);
+        ctx.fillRect(barX + 1, barY + 1, Math.max(0, (progressWidth - 2) * progressRatio), progressHeight - 2);
         ctx.fillStyle = '#1c2433';
         const icon = POWER_TYPE_ICONS[e.powerType];
         if (!icon) console.warn(`Unknown power type: ${e.powerType}. Valid types are: growth, shield, speed, role. Defaulting to ?.`);
