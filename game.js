@@ -12,6 +12,7 @@
   const ROAD_HORIZON_Y = 90;
   const ROAD_TOP_MIN_X = 0.34;
   const ROAD_TOP_SPAN_X = 0.32;
+  const ROAD_TOP_LANE_STEPS = Math.round(ROAD_TOP_SPAN_X * 100);
   const ENEMY_WIDTH = 144;
   const ENEMY_HEIGHT = 92;
   const POWER_UP_RADIUS = 72;
@@ -36,6 +37,8 @@
   const ENEMY_BREACH_TICK_SECONDS = 1;
   const ENTITY_CLEANUP_MARGIN = 120;
   const ARMY_BAR_MAX_UNITS = 180;
+  const POWER_GROWTH_MIN_GAIN = 2;
+  const POWER_GROWTH_GAIN_RANGE = 3;
   const POWER_TYPE_ICONS = { growth: '+' };
 
   const canvas = document.getElementById('gameCanvas');
@@ -77,9 +80,9 @@
       const segmentLength = SPAWN_SEGMENT_LENGTH;
       for (let seg = 0; seg < LEVEL_DURATION / segmentLength; seg++) {
         const baseT = seg * segmentLength;
-        const laneA = ROAD_TOP_MIN_X + ((seg * 37 + i * 11) % 18) / 100;
-        const laneB = ROAD_TOP_MIN_X + ((seg * 53 + i * 7 + 21) % 18) / 100;
-        const laneC = ROAD_TOP_MIN_X + ((seg * 29 + i * 13 + 44) % 18) / 100;
+        const laneA = ROAD_TOP_MIN_X + ((seg * 37 + i * 11) % ROAD_TOP_LANE_STEPS) / 100;
+        const laneB = ROAD_TOP_MIN_X + ((seg * 53 + i * 7 + 21) % ROAD_TOP_LANE_STEPS) / 100;
+        const laneC = ROAD_TOP_MIN_X + ((seg * 29 + i * 13 + 44) % ROAD_TOP_LANE_STEPS) / 100;
         let burstPattern = 'zigzag';
         let burstX = laneC;
         if (seg % 3 === 0) {
@@ -177,23 +180,23 @@
     return levelDef.speed + milestoneBoost + progressBoost;
   }
 
-  function formationHalfWidth() {
+  function formationRangeX() {
     return 42 + Math.min(260, Math.sqrt(state.armySize) * 19);
   }
 
-  function formationHalfHeight() {
+  function formationRangeY() {
     return 24 + Math.min(90, Math.sqrt(state.armySize) * 8);
   }
 
   function fireProjectiles() {
     const shotCount = Math.max(1, Math.floor(state.armySize));
-    const width = formationHalfWidth() * 2.4;
+    const width = formationRangeX() * 2.4;
     for (let i = 0; i < shotCount; i++) {
       const slot = shotCount === 1 ? 0.5 : i / (shotCount - 1);
       const offset = (slot - 0.5) * width;
       state.projectiles.push({
         x: state.playerX + offset,
-        y: state.playerY - formationHalfHeight() - 20,
+        y: state.playerY - formationRangeY() - 20,
         r: 5,
         speed: BASE_PROJECTILE_SPEED + state.level * PROJECTILE_SPEED_PER_LEVEL,
       });
@@ -221,8 +224,8 @@
     state.armySize += count;
   }
 
-  function applyPower() {
-    const gain = 2 + Math.floor(Math.random() * 3);
+  function applyGrowthPower() {
+    const gain = POWER_GROWTH_MIN_GAIN + Math.floor(Math.random() * POWER_GROWTH_GAIN_RANGE);
     addUnits(gain);
     state.score += 90;
     statusEl.textContent = `Growth pickup: +${gain} units`;
@@ -281,8 +284,9 @@
 
     const px = state.playerX;
     const py = state.playerY;
-    const formationW = formationHalfWidth();
-    const formationH = formationHalfHeight();
+    const formationW = formationRangeX();
+    const formationH = formationRangeY();
+    const formationCollisionBound = Math.max(formationW, formationH);
 
     state.entities = state.entities.filter((e) => {
       if (e.kind !== 'enemy' && e.y > canvas.height + ENTITY_CLEANUP_MARGIN) return false;
@@ -307,7 +311,10 @@
           return true;
         }
       } else if (e.kind === 'trap') {
-        if (e.active && overlapsCircleRect(px, py - 20, formationW, e.x - e.w * 0.5, e.y - e.h * 0.5, e.w, e.h)) {
+        if (
+          e.active
+          && overlapsCircleRect(px, py - 20, formationCollisionBound, e.x - e.w * 0.5, e.y - e.h * 0.5, e.w, e.h)
+        ) {
           loseUnits(2, 'Trap hit');
           return false;
         }
@@ -340,7 +347,7 @@
             state.fx.push({ type: 'hit', x: e.x, y: e.y, ttl: 0.18 });
             if (e.hp <= 0) {
               e.destroyed = true;
-              applyPower(e.powerType);
+              applyGrowthPower();
               state.fx.push({ type: 'pickup', x: e.x, y: e.y, ttl: 0.45 });
             }
           } else {
@@ -476,8 +483,8 @@
   }
 
   function drawArmy() {
-    const w = formationHalfWidth();
-    const h = formationHalfHeight();
+    const w = formationRangeX();
+    const h = formationRangeY();
     const count = Math.min(state.armySize, 90);
 
     for (let i = 0; i < count; i++) {
