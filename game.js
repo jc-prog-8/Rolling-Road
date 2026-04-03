@@ -91,12 +91,14 @@
         const laneA = 0.18 + ((seg * 37 + i * 11) % 64) / 100;
         const laneB = 0.18 + ((seg * 53 + i * 7 + 21) % 64) / 100;
         const laneC = 0.18 + ((seg * 29 + i * 13 + 44) % 64) / 100;
+        const burstPattern = seg % 3 === 0 ? 'flank' : 'zigzag';
+        const burstX = burstPattern === 'flank' ? (seg % 2 === 0 ? 0.05 : 0.95) : laneA;
 
         events.push({ t: baseT + 1, kind: 'enemy', pattern: 'straight', x: laneA });
         events.push({ t: baseT + EXTRA_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: 'straight', x: laneB });
         events.push({ t: baseT + 3.5, kind: 'trap', pattern: seg % 3 === 0 ? 'timed' : 'static', x: laneB });
         events.push({ t: baseT + 5, kind: 'enemy', pattern: seg % 2 === 0 ? 'zigzag' : 'straight', x: laneC });
-        events.push({ t: baseT + 7.8, kind: 'enemy', pattern: seg % 3 === 0 ? 'flank' : 'zigzag', x: seg % 3 === 0 ? (seg % 2 === 0 ? 0.05 : 0.95) : laneA });
+        events.push({ t: baseT + 7.8, kind: 'enemy', pattern: burstPattern, x: burstX });
 
         if (seg % 2 === 1) {
           events.push({ t: baseT + 7, kind: 'enemy', pattern: 'flank', x: seg % 4 === 1 ? 0.05 : 0.95 });
@@ -326,6 +328,12 @@
     return 20 + Math.min(66, Math.sqrt(state.armySize) * 8);
   }
 
+  function anchorEnemy(enemy, holdY) {
+    enemy.anchored = true;
+    enemy.y = holdY;
+    enemy.nextDamageAt = state.totalTime;
+  }
+
   function updateEntities(dt) {
     const enemyHoldY = state.playerY - ENEMY_HOLD_LINE_OFFSET;
 
@@ -345,9 +353,7 @@
           }
           e.y += e.speed * dt;
           if (e.y >= enemyHoldY) {
-            e.anchored = true;
-            e.y = enemyHoldY;
-            e.nextDamageAt = state.totalTime;
+            anchorEnemy(e, enemyHoldY);
           }
         }
       } else if (e.kind === 'trap') {
@@ -373,13 +379,11 @@
         const dy = e.y - (py - 30);
         if (dx * dx + dy * dy < (e.r + pr) ** 2) {
           if (!e.anchored) {
-            e.anchored = true;
-            e.y = enemyHoldY;
-            e.nextDamageAt = state.totalTime;
+            anchorEnemy(e, enemyHoldY);
           }
           const supportShield = Math.min(3, Math.floor(state.role.support / 3));
           if (state.totalTime >= (e.nextDamageAt || 0)) {
-            loseUnits(Math.max(1, 3 - supportShield), 'Enemy breach');
+            loseUnits(Math.max(1, 3 - supportShield), 'Enemy hit');
             e.nextDamageAt = state.totalTime + ENEMY_BREACH_TICK_SECONDS;
             if (!e.breachedScoreAwarded) {
               state.score += 10 + state.role.ranged;
