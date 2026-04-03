@@ -52,6 +52,14 @@
   const POWER_GROWTH_MIN_GAIN = 1;
   const POWER_GROWTH_GAIN_RANGE = 1;
   const POWER_TYPE_ICONS = { growth: '+' };
+  const SUN_GLOW_RADIUS = 190;
+  const MOUNTAIN_LAYER_WIDTH = 260;
+  const MOUNTAIN_TILE_START_X = -320;
+  const MOUNTAIN_TILE_END_PAD = 320;
+  const POWER_PULSE_BASE = 0.85;
+  const POWER_PULSE_SPEED = 3.3;
+  const POWER_PULSE_OFFSET = 0.02;
+  const POWER_PULSE_AMPLITUDE = 0.08;
 
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
@@ -568,21 +576,21 @@
 
     const sunX = w * 0.5;
     const sunY = ROAD_HORIZON_Y + 8;
-    const glow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 190);
+    const glow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, SUN_GLOW_RADIUS);
     glow.addColorStop(0, 'rgba(255, 214, 140, 0.95)');
     glow.addColorStop(0.36, 'rgba(255, 167, 106, 0.5)');
     glow.addColorStop(1, 'rgba(255, 167, 106, 0)');
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(sunX, sunY, 190, 0, Math.PI * 2);
+    ctx.arc(sunX, sunY, SUN_GLOW_RADIUS, 0, Math.PI * 2);
     ctx.fill();
 
     for (let layer = 0; layer < 3; layer++) {
       const speed = 0.08 + layer * 0.09;
       const y = ROAD_HORIZON_Y + 16 + layer * 30;
-      const offset = (state.bgOffset * speed) % 260;
+      const offset = (state.bgOffset * speed) % MOUNTAIN_LAYER_WIDTH;
       ctx.fillStyle = layer === 0 ? '#192e4e' : layer === 1 ? '#1d385e' : '#24436c';
-      for (let x = -320 + offset; x < w + 320; x += 260) {
+      for (let x = MOUNTAIN_TILE_START_X + offset; x < w + MOUNTAIN_TILE_END_PAD; x += MOUNTAIN_LAYER_WIDTH) {
         ctx.beginPath();
         ctx.moveTo(x, y + 80);
         ctx.lineTo(x + 50, y + 18);
@@ -867,7 +875,8 @@
         const progressRatio = 1 - (Math.max(0, e.hp) / maxHp);
         const scale = POWER_PROGRESS_MIN_SCALE + progressRatio * POWER_PROGRESS_SCALE_GAIN;
         const visualR = e.r * scale;
-        const pulse = 0.85 + Math.sin(state.totalTime * 3.3 + e.x * 0.02) * 0.08;
+        const pulse = POWER_PULSE_BASE
+          + Math.sin(state.totalTime * POWER_PULSE_SPEED + e.x * POWER_PULSE_OFFSET) * POWER_PULSE_AMPLITUDE;
 
         const aura = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, visualR * 1.6);
         aura.addColorStop(0, 'rgba(132, 255, 165, 0.45)');
