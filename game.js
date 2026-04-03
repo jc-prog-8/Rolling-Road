@@ -93,7 +93,6 @@
       for (let seg = 0; seg < LEVEL_DURATION / segmentLength; seg++) {
         const baseT = seg * segmentLength;
         const isEvenSeg = seg % 2 === 0;
-        const isOddSeg = !isEvenSeg;
         const laneA = ROAD_TOP_MIN_X + ((seg * 37 + i * 11) % ROAD_TOP_LANE_STEPS) / 100;
         const laneB = ROAD_TOP_MIN_X + ((seg * 53 + i * 7 + 21) % ROAD_TOP_LANE_STEPS) / 100;
         const laneC = ROAD_TOP_MIN_X + ((seg * 29 + i * 13 + 44) % ROAD_TOP_LANE_STEPS) / 100;
@@ -111,7 +110,7 @@
         events.push({ t: baseT + BURST_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: burstPattern, x: burstX });
         events.push({ t: baseT + EXTRA_SEGMENT_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: isEvenSeg ? 'straight' : 'zigzag', x: isEvenSeg ? laneA : laneB });
 
-        if (isOddSeg) {
+        if (!isEvenSeg) {
           events.push({
             t: baseT + 7, kind: 'enemy', pattern: 'flank', x: seg % 4 === 1 ? ROAD_TOP_MIN_X : ROAD_TOP_MIN_X + ROAD_TOP_SPAN_X
           });
@@ -221,7 +220,7 @@
     });
   }
 
-  function fireProjectiles(dt) {
+  function processQueuedShots(dt) {
     state.shotStaggerTimer -= dt;
     while (state.shotOffsetQueue.length && state.shotStaggerTimer <= 0) {
       const offset = state.shotOffsetQueue.shift();
@@ -257,18 +256,18 @@
     clampPlayerX();
   }
 
-  function resetFireTimer(dt) {
+  function decrementFireTimer(dt) {
     state.fireTimer -= dt;
   }
 
   function updateFiring(dt) {
-    resetFireTimer(dt);
+    decrementFireTimer(dt);
     const fireInterval = FIRE_INTERVAL_SECONDS;
     while (state.fireTimer <= 0) {
       queueVolley();
       state.fireTimer += fireInterval;
     }
-    fireProjectiles(dt);
+    processQueuedShots(dt);
   }
 
   function updateRoadOffsets(dt) {
