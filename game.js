@@ -8,6 +8,9 @@
   const KEYBOARD_MOVEMENT_DISTANCE = 180;
   const EXTRA_ENEMY_TIMING_OFFSET = 2.2;
   const EXTRA_POWER_TIMING_OFFSET = 8.2;
+  const BURST_ENEMY_TIMING_OFFSET = 7.8;
+  const SPAWN_SEGMENT_LENGTH = 12;
+  const SPAWN_Y_OFFSET = 24;
   const ENEMY_RADIUS = 72;
   const POWER_UP_RADIUS = 72;
   const BASE_ENEMY_HP = 1;
@@ -40,6 +43,7 @@
   const POWER_UP_ICON_Y_OFFSET = 1;
   const ENEMY_HOLD_LINE_OFFSET = 64;
   const ENEMY_BREACH_TICK_SECONDS = 0.75;
+  const ENTITY_CLEANUP_MARGIN = 120;
   const ARMY_BAR_MAX_UNITS = 180;
   const POWER_TYPE_ICONS = { growth: '+', shield: 'S', speed: '>>', role: 'R' };
 
@@ -85,20 +89,24 @@
       const levelSpeed = BASE_SCROLL + i * 35;
       const density = 1 + i * 0.27;
       const events = [];
-      const segmentLength = 12;
+      const segmentLength = SPAWN_SEGMENT_LENGTH;
       for (let seg = 0; seg < LEVEL_DURATION / segmentLength; seg++) {
         const baseT = seg * segmentLength;
         const laneA = 0.18 + ((seg * 37 + i * 11) % 64) / 100;
         const laneB = 0.18 + ((seg * 53 + i * 7 + 21) % 64) / 100;
         const laneC = 0.18 + ((seg * 29 + i * 13 + 44) % 64) / 100;
-        const burstPattern = seg % 3 === 0 ? 'flank' : 'zigzag';
-        const burstX = burstPattern === 'flank' ? (seg % 2 === 0 ? 0.05 : 0.95) : laneA;
+        let burstPattern = 'zigzag';
+        let burstX = laneC;
+        if (seg % 3 === 0) {
+          burstPattern = 'flank';
+          burstX = seg % 2 === 0 ? 0.05 : 0.95;
+        }
 
         events.push({ t: baseT + 1, kind: 'enemy', pattern: 'straight', x: laneA });
         events.push({ t: baseT + EXTRA_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: 'straight', x: laneB });
         events.push({ t: baseT + 3.5, kind: 'trap', pattern: seg % 3 === 0 ? 'timed' : 'static', x: laneB });
         events.push({ t: baseT + 5, kind: 'enemy', pattern: seg % 2 === 0 ? 'zigzag' : 'straight', x: laneC });
-        events.push({ t: baseT + 7.8, kind: 'enemy', pattern: burstPattern, x: burstX });
+        events.push({ t: baseT + BURST_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: burstPattern, x: burstX });
 
         if (seg % 2 === 1) {
           events.push({ t: baseT + 7, kind: 'enemy', pattern: 'flank', x: seg % 4 === 1 ? 0.05 : 0.95 });
@@ -133,7 +141,7 @@
   }
 
   function spawnEntity(ev) {
-    const y = -Math.max(ENEMY_RADIUS, POWER_UP_RADIUS) - 24;
+    const y = -Math.max(ENEMY_RADIUS, POWER_UP_RADIUS) - SPAWN_Y_OFFSET;
     const x = ev.x * canvas.width;
     const baseSpeed = currentSpeed() * (0.8 + Math.random() * 0.25);
 
@@ -334,6 +342,10 @@
     enemy.nextDamageAt = state.totalTime;
   }
 
+  function anchorEnemyIfNeeded(enemy, holdY) {
+    if (!enemy.anchored) anchorEnemy(enemy, holdY);
+  }
+
   function updateEntities(dt) {
     const enemyHoldY = state.playerY - ENEMY_HOLD_LINE_OFFSET;
 
@@ -353,7 +365,7 @@
           }
           e.y += e.speed * dt;
           if (e.y >= enemyHoldY) {
-            anchorEnemy(e, enemyHoldY);
+            anchorEnemyIfNeeded(e, enemyHoldY);
           }
         }
       } else if (e.kind === 'trap') {
@@ -372,15 +384,17 @@
     const pr = formationRadius();
 
     state.entities = state.entities.filter((e) => {
-      if (e.kind !== 'enemy' && e.y > canvas.height + 120) return false;
+      if (e.kind !== 'enemy' && e.y > canvas.height + ENTITY_CLEANUP_MARGIN) return false;
+      if (
+        e.kind === 'enemy'
+        && (e.x < -ENTITY_CLEANUP_MARGIN - e.r || e.x > canvas.width + ENTITY_CLEANUP_MARGIN + e.r)
+      ) return false;
 
       if (e.kind === 'enemy') {
         const dx = e.x - px;
         const dy = e.y - (py - 30);
         if (dx * dx + dy * dy < (e.r + pr) ** 2) {
-          if (!e.anchored) {
-            anchorEnemy(e, enemyHoldY);
-          }
+          anchorEnemyIfNeeded(e, enemyHoldY);
           const supportShield = Math.min(3, Math.floor(state.role.support / 3));
           if (state.totalTime >= (e.nextDamageAt || 0)) {
             loseUnits(Math.max(1, 3 - supportShield), 'Enemy hit');
