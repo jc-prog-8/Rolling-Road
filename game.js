@@ -60,6 +60,9 @@
   const POWER_PULSE_SPEED = 3.3;
   const POWER_PULSE_OFFSET = 0.02;
   const POWER_PULSE_AMPLITUDE = 0.08;
+  const POWER_SPAWN_RATE_START = 1;
+  const POWER_SPAWN_RATE_END = 0.35;
+  const ENEMY_PRESSURE_FROM_POWER_DROP = 0.8;
   const ROAD_TILE_INSET_RATIO = 0.06;
   const ROAD_SIDE_LINE_GAP = 34;
   const ROAD_SIDE_LINE_LENGTH = 18;
@@ -85,7 +88,7 @@
     timeInLevel: 0,
     totalTime: 0,
     score: 0,
-    armySize: 4,
+    armySize: 1,
     touchTargetX: null,
     entities: [],
     projectiles: [],
@@ -222,14 +225,40 @@
     return 24 + Math.min(90, Math.sqrt(state.armySize) * 8);
   }
 
+  function overallProgressRatio() {
+    const totalDuration = LEVEL_COUNT * LEVEL_DURATION;
+    const elapsed = state.level * LEVEL_DURATION + state.timeInLevel;
+    return Math.max(0, Math.min(1, elapsed / totalDuration));
+  }
+
+  function currentPowerSpawnRate() {
+    const progress = overallProgressRatio();
+    return POWER_SPAWN_RATE_START - ((POWER_SPAWN_RATE_START - POWER_SPAWN_RATE_END) * progress);
+  }
+
+  function enemyPressureMultiplier() {
+    const powerRate = currentPowerSpawnRate();
+    return 1 + ((1 - powerRate) * ENEMY_PRESSURE_FROM_POWER_DROP);
+  }
+
   function queueVolley() {
     const effectiveArmySize = Math.max(1, Math.floor(state.armySize));
     const shotCount = effectiveArmySize === 1 ? SINGLE_UNIT_SHOT_COUNT : effectiveArmySize;
     const shotInterval = FIRE_INTERVAL_SECONDS / shotCount;
     const width = formationRangeX() * VOLLEY_WIDTH_MULTIPLIER;
+    const offsets = [];
     for (let i = 0; i < shotCount; i++) {
       const slot = shotCount === 1 ? 0.5 : i / (shotCount - 1);
       const offset = (slot - 0.5) * width;
+      offsets.push(offset);
+    }
+    for (let i = offsets.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = offsets[i];
+      offsets[i] = offsets[j];
+      offsets[j] = tmp;
+    }
+    for (const offset of offsets) {
       state.queuedShots.push({ offset, shotInterval });
     }
   }
@@ -504,8 +533,16 @@
     const def = state.levelDefs[state.level];
     while (def.events.length && def.events[0].t <= state.timeInLevel) {
       const ev = def.events.shift();
-      spawnEntity(ev);
-      if (Math.random() < Math.min(MAX_EXTRA_SPAWN_PROBABILITY, DENSITY_SPAWN_MULTIPLIER * def.density)) {
+      let spawned = false;
+      if (ev.kind !== 'power' || Math.random() < currentPowerSpawnRate()) {
+        spawnEntity(ev);
+        spawned = true;
+      }
+      const extraEnemyChance = Math.min(
+        MAX_EXTRA_SPAWN_PROBABILITY,
+        DENSITY_SPAWN_MULTIPLIER * def.density * enemyPressureMultiplier()
+      );
+      if (spawned && Math.random() < extraEnemyChance) {
         spawnEntity({ t: ev.t, kind: 'enemy', pattern: 'straight', x: ROAD_TOP_MIN_X + Math.random() * ROAD_TOP_SPAN_X });
       }
     }
