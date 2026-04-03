@@ -60,6 +60,15 @@
   const POWER_PULSE_SPEED = 3.3;
   const POWER_PULSE_OFFSET = 0.02;
   const POWER_PULSE_AMPLITUDE = 0.08;
+  const ROAD_TILE_INSET_RATIO = 0.06;
+  const ROAD_SIDE_LINE_GAP = 34;
+  const ROAD_SIDE_LINE_LENGTH = 18;
+  const ROAD_CENTER_STRIPE_GAP = 72;
+  const ROAD_CENTER_STRIPE_LENGTH = 28;
+  const SOLDIER_BODY_X_RATIO = 0.5;
+  const SOLDIER_BODY_Y_RATIO = 0.4;
+  const SOLDIER_BODY_HEIGHT_RATIO = 1.16;
+  const SOLDIER_BODY_RADIUS_SCALE = 2.5;
 
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
@@ -523,7 +532,7 @@
     updateState(dt);
   }
 
-  function roadBoundsAtY(y) {
+  function getRoadBoundsAtY(y) {
     const w = canvas.width;
     const h = canvas.height;
     const t = Math.max(0, Math.min(1, (y - ROAD_HORIZON_Y) / (h - ROAD_HORIZON_Y)));
@@ -622,19 +631,17 @@
     ctx.clip();
 
     for (let y = ROAD_HORIZON_Y + 6; y < h; y += 14) {
-      const { left, width, t } = roadBoundsAtY(y);
-      const tileInset = width * 0.06;
+      const { left, width, t } = getRoadBoundsAtY(y);
+      const tileInset = width * ROAD_TILE_INSET_RATIO;
       const alpha = 0.06 + t * 0.06;
       ctx.fillStyle = `rgba(216, 245, 255, ${alpha})`;
       ctx.fillRect(left + tileInset, y, width - tileInset * 2, 2 + t * 4);
     }
 
-    const sideLineGap = 34;
-    const sideLineLen = 18;
-    const sideBase = state.roadOffset * 0.8 % sideLineGap;
-    for (let y = ROAD_HORIZON_Y - sideLineGap + sideBase; y < h; y += sideLineGap) {
-      const { left, right, t } = roadBoundsAtY(y);
-      const dashLen = sideLineLen * (0.7 + t * 1.4);
+    const sideBase = state.roadOffset * 0.8 % ROAD_SIDE_LINE_GAP;
+    for (let y = ROAD_HORIZON_Y - ROAD_SIDE_LINE_GAP + sideBase; y < h; y += ROAD_SIDE_LINE_GAP) {
+      const { left, right, t } = getRoadBoundsAtY(y);
+      const dashLen = ROAD_SIDE_LINE_LENGTH * (0.7 + t * 1.4);
       const inset = 8 + t * 18;
       ctx.strokeStyle = `rgba(209, 241, 255, ${0.5 + t * 0.45})`;
       ctx.lineWidth = 1.6 + t * 4;
@@ -648,11 +655,9 @@
       ctx.stroke();
     }
 
-    const stripeGap = 72;
-    const stripeLen = 28;
-    const base = state.roadOffset % stripeGap;
-    for (let y = ROAD_HORIZON_Y - stripeGap + base; y < h; y += stripeGap) {
-      const { t } = roadBoundsAtY(y);
+    const base = state.roadOffset % ROAD_CENTER_STRIPE_GAP;
+    for (let y = ROAD_HORIZON_Y - ROAD_CENTER_STRIPE_GAP + base; y < h; y += ROAD_CENTER_STRIPE_GAP) {
+      const { t } = getRoadBoundsAtY(y);
       const widthScale = Math.max(0.12, t);
       ctx.strokeStyle = `rgba(248, 255, 253, ${0.72 + t * 0.22})`;
       ctx.lineWidth = 2 + widthScale * 5;
@@ -660,7 +665,7 @@
       ctx.shadowBlur = 8 + widthScale * 10;
       ctx.beginPath();
       ctx.moveTo(w * 0.5, y);
-      ctx.lineTo(w * 0.5, y + stripeLen * (0.52 + widthScale));
+      ctx.lineTo(w * 0.5, y + ROAD_CENTER_STRIPE_LENGTH * (0.52 + widthScale));
       ctx.stroke();
       ctx.shadowBlur = 0;
     }
@@ -683,7 +688,13 @@
     ctx.fill();
 
     ctx.fillStyle = '#1b3854';
-    roundedRectPath(ux - unitSize * 0.5, uy - unitSize * 0.4, unitSize, unitSize * 1.16, 2.5 * scale);
+    roundedRectPath(
+      ux - unitSize * SOLDIER_BODY_X_RATIO,
+      uy - unitSize * SOLDIER_BODY_Y_RATIO,
+      unitSize,
+      unitSize * SOLDIER_BODY_HEIGHT_RATIO,
+      SOLDIER_BODY_RADIUS_SCALE * scale
+    );
     ctx.fill();
 
     ctx.fillStyle = bodyColor;
