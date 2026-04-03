@@ -1,7 +1,13 @@
 (() => {
   const LEVEL_COUNT = 5;
-  const LEVEL_DURATION = 240;
-  const BASE_SCROLL = 260;
+  const DEFAULT_LEVEL_DURATION = 240;
+  const DEFAULT_BASE_SCROLL = 260;
+  const DEFAULT_DENSITY_SPAWN_MULTIPLIER = 0.85;
+  const DEFAULT_PROJECTILE_SPEED_PER_LEVEL = 35;
+  const DEFAULT_POWER_SPAWN_RATE_END = 0.35;
+  const DEFAULT_STARTING_ARMY_SIZE = 1;
+  let LEVEL_DURATION = DEFAULT_LEVEL_DURATION;
+  let BASE_SCROLL = DEFAULT_BASE_SCROLL;
   const PLAYER_BOTTOM_PADDING = 170;
   const KEYBOARD_MOVEMENT_STEP = 180;
   const EXTRA_ENEMY_TIMING_OFFSET = 2.2;
@@ -24,12 +30,12 @@
   const ENEMY_HP_LEVEL_BONUS = 1;
   const ENEMY_HP_FLANK_BONUS = 1;
   const MAX_EXTRA_SPAWN_PROBABILITY = 0.9;
-  const DENSITY_SPAWN_MULTIPLIER = 0.85;
+  let DENSITY_SPAWN_MULTIPLIER = DEFAULT_DENSITY_SPAWN_MULTIPLIER;
   const FIRE_INTERVAL_SECONDS = 0.75;
   const SINGLE_UNIT_SHOT_COUNT = 3;
   const VOLLEY_WIDTH_MULTIPLIER = 1.35;
   const BASE_PROJECTILE_SPEED = 600;
-  const PROJECTILE_SPEED_PER_LEVEL = 35;
+  let PROJECTILE_SPEED_PER_LEVEL = DEFAULT_PROJECTILE_SPEED_PER_LEVEL;
   const PROJECTILE_OFFSCREEN_THRESHOLD = -40;
   const POWER_PROGRESS_MIN_SCALE = 0.88;
   const POWER_PROGRESS_SCALE_GAIN = 0.22;
@@ -61,7 +67,7 @@
   const POWER_PULSE_OFFSET = 0.02;
   const POWER_PULSE_AMPLITUDE = 0.08;
   const POWER_SPAWN_RATE_START = 1;
-  const POWER_SPAWN_RATE_END = 0.35;
+  let POWER_SPAWN_RATE_END = DEFAULT_POWER_SPAWN_RATE_END;
   const ENEMY_PRESSURE_FROM_POWER_DROP = 0.8;
   const ROAD_TILE_INSET_RATIO = 0.06;
   const ROAD_SIDE_LINE_GAP = 34;
@@ -80,15 +86,18 @@
   const timeEl = document.getElementById('timeLabel');
   const armyEl = document.getElementById('armyLabel');
   const scoreEl = document.getElementById('scoreLabel');
+  const setupScreenEl = document.getElementById('setupScreen');
+  const setupFormEl = document.getElementById('setupForm');
 
   const state = {
-    running: true,
+    running: false,
+    started: false,
     victory: false,
     level: 0,
     timeInLevel: 0,
     totalTime: 0,
     score: 0,
-    armySize: 1,
+    armySize: DEFAULT_STARTING_ARMY_SIZE,
     touchTargetX: null,
     entities: [],
     projectiles: [],
@@ -104,6 +113,146 @@
     pointerActive: false,
     levelDefs: []
   };
+
+  const setupConfig = {
+    levelDuration: {
+      defaultValue: DEFAULT_LEVEL_DURATION,
+      min: 120,
+      max: 360,
+      step: 10,
+      parse: (value) => Number.parseInt(value, 10)
+    },
+    baseScroll: {
+      defaultValue: DEFAULT_BASE_SCROLL,
+      min: 180,
+      max: 360,
+      step: 5,
+      parse: (value) => Number.parseInt(value, 10)
+    },
+    enemyDensityMultiplier: {
+      defaultValue: DEFAULT_DENSITY_SPAWN_MULTIPLIER,
+      min: 0.5,
+      max: 1.5,
+      step: 0.05,
+      parse: (value) => Number.parseFloat(value)
+    },
+    projectileSpeedPerLevel: {
+      defaultValue: DEFAULT_PROJECTILE_SPEED_PER_LEVEL,
+      min: 10,
+      max: 70,
+      step: 1,
+      parse: (value) => Number.parseInt(value, 10)
+    },
+    powerSpawnRateEnd: {
+      defaultValue: DEFAULT_POWER_SPAWN_RATE_END,
+      min: 0.1,
+      max: 0.8,
+      step: 0.05,
+      parse: (value) => Number.parseFloat(value)
+    },
+    startingArmySize: {
+      defaultValue: DEFAULT_STARTING_ARMY_SIZE,
+      min: 1,
+      max: 30,
+      step: 1,
+      parse: (value) => Number.parseInt(value, 10)
+    }
+  };
+
+  function clampValue(value, cfg) {
+    const numeric = Number.isFinite(value) ? value : cfg.defaultValue;
+    const clamped = Math.min(cfg.max, Math.max(cfg.min, numeric));
+    const steps = Math.round((clamped - cfg.min) / cfg.step);
+    const snapped = cfg.min + steps * cfg.step;
+    const decimals = `${cfg.step}`.includes('.') ? (`${cfg.step}`.split('.')[1] || '').length : 0;
+    return Number(snapped.toFixed(decimals));
+  }
+
+  function syncPair(paramName, value, source) {
+    const rangeEl = document.getElementById(`${paramName}Range`);
+    const inputEl = document.getElementById(`${paramName}Input`);
+    if (!rangeEl || !inputEl) return;
+    if (source !== 'range') rangeEl.value = `${value}`;
+    if (source !== 'input') inputEl.value = `${value}`;
+  }
+
+  function setupParameterBindings() {
+    for (const [paramName, cfg] of Object.entries(setupConfig)) {
+      const rangeEl = document.getElementById(`${paramName}Range`);
+      const inputEl = document.getElementById(`${paramName}Input`);
+      if (!rangeEl || !inputEl) continue;
+
+      const applyValue = (rawValue, source) => {
+        const parsed = cfg.parse(rawValue);
+        const nextValue = clampValue(parsed, cfg);
+        syncPair(paramName, nextValue, source);
+        return nextValue;
+      };
+
+      const setDefaults = () => {
+        syncPair(paramName, cfg.defaultValue);
+      };
+      setDefaults();
+
+      rangeEl.addEventListener('input', () => {
+        applyValue(rangeEl.value, 'range');
+      });
+      inputEl.addEventListener('input', () => {
+        applyValue(inputEl.value, 'input');
+      });
+      inputEl.addEventListener('blur', () => {
+        applyValue(inputEl.value, 'input');
+      });
+    }
+  }
+
+  function readSetupValues() {
+    const values = {};
+    for (const [paramName, cfg] of Object.entries(setupConfig)) {
+      const inputEl = document.getElementById(`${paramName}Input`);
+      const value = inputEl ? cfg.parse(inputEl.value) : cfg.defaultValue;
+      values[paramName] = clampValue(value, cfg);
+      syncPair(paramName, values[paramName]);
+    }
+    return values;
+  }
+
+  function applySetupValues(values) {
+    LEVEL_DURATION = values.levelDuration;
+    BASE_SCROLL = values.baseScroll;
+    DENSITY_SPAWN_MULTIPLIER = values.enemyDensityMultiplier;
+    PROJECTILE_SPEED_PER_LEVEL = values.projectileSpeedPerLevel;
+    POWER_SPAWN_RATE_END = values.powerSpawnRateEnd;
+    state.armySize = values.startingArmySize;
+    state.level = 0;
+    state.timeInLevel = 0;
+    state.totalTime = 0;
+    state.score = 0;
+    state.entities = [];
+    state.projectiles = [];
+    state.fx = [];
+    state.fireTimer = 0;
+    state.shotStaggerTimer = 0;
+    state.queuedShots = [];
+    state.damageFlash = 0;
+    state.victory = false;
+    state.running = true;
+    state.started = true;
+    state.levelDefs = createLevels();
+    updateHud();
+    statusEl.textContent = 'Game started. Tap or drag to steer.';
+  }
+
+  function initSetupScreen() {
+    setupParameterBindings();
+    if (!setupFormEl) return;
+    setupFormEl.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const setupValues = readSetupValues();
+      applySetupValues(setupValues);
+      if (setupScreenEl) setupScreenEl.classList.add('hidden');
+    });
+  }
 
   function createLevels() {
     const defs = [];
@@ -156,6 +305,7 @@
   }
 
   state.levelDefs = createLevels();
+  statusEl.textContent = 'Adjust setup options, then tap Start Game.';
 
   function spawnEntity(ev) {
     const y = ROAD_HORIZON_Y + SPAWN_Y_OFFSET;
@@ -1011,7 +1161,7 @@
     drawFx();
     drawArmyBar();
 
-    if (!state.running) {
+    if (!state.running && state.started) {
       ctx.fillStyle = 'rgba(8, 12, 18, 0.8)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#ffffff';
@@ -1065,6 +1215,7 @@
     });
   }
 
+  initSetupScreen();
   bindControls();
 
   let last = performance.now();

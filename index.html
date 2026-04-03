@@ -8,6 +8,63 @@
   </head>
   <body>
     <main class="app">
+      <section id="setupScreen" class="setup-screen" aria-labelledby="setupTitle">
+        <div class="setup-card">
+          <h2 id="setupTitle">Game Setup</h2>
+          <p class="setup-intro">Choose difficulty-related settings, then start the run.</p>
+          <form id="setupForm" class="setup-form">
+            <div class="setup-field" data-param="levelDuration">
+              <label for="levelDurationRange">Level duration (seconds)</label>
+              <p class="setup-description">Longer levels add more enemy waves before each transition.</p>
+              <div class="setup-inputs">
+                <input id="levelDurationRange" type="range" min="120" max="360" step="10" value="240" />
+                <input id="levelDurationInput" type="number" min="120" max="360" step="10" value="240" inputmode="numeric" />
+              </div>
+            </div>
+            <div class="setup-field" data-param="baseScroll">
+              <label for="baseScrollRange">Base scroll speed</label>
+              <p class="setup-description">Higher speed gives less time to react to enemies and traps.</p>
+              <div class="setup-inputs">
+                <input id="baseScrollRange" type="range" min="180" max="360" step="5" value="260" />
+                <input id="baseScrollInput" type="number" min="180" max="360" step="5" value="260" inputmode="numeric" />
+              </div>
+            </div>
+            <div class="setup-field" data-param="enemyDensityMultiplier">
+              <label for="enemyDensityMultiplierRange">Enemy density multiplier</label>
+              <p class="setup-description">Higher values increase the chance of extra enemy spawns.</p>
+              <div class="setup-inputs">
+                <input id="enemyDensityMultiplierRange" type="range" min="0.5" max="1.5" step="0.05" value="0.85" />
+                <input id="enemyDensityMultiplierInput" type="number" min="0.5" max="1.5" step="0.05" value="0.85" inputmode="decimal" />
+              </div>
+            </div>
+            <div class="setup-field" data-param="projectileSpeedPerLevel">
+              <label for="projectileSpeedPerLevelRange">Projectile speed gain per level</label>
+              <p class="setup-description">Higher values make attacks stronger as levels progress.</p>
+              <div class="setup-inputs">
+                <input id="projectileSpeedPerLevelRange" type="range" min="10" max="70" step="1" value="35" />
+                <input id="projectileSpeedPerLevelInput" type="number" min="10" max="70" step="1" value="35" inputmode="numeric" />
+              </div>
+            </div>
+            <div class="setup-field" data-param="powerSpawnRateEnd">
+              <label for="powerSpawnRateEndRange">Late-game power-up spawn rate</label>
+              <p class="setup-description">Lower rates make growth pickups rarer in later levels.</p>
+              <div class="setup-inputs">
+                <input id="powerSpawnRateEndRange" type="range" min="0.1" max="0.8" step="0.05" value="0.35" />
+                <input id="powerSpawnRateEndInput" type="number" min="0.1" max="0.8" step="0.05" value="0.35" inputmode="decimal" />
+              </div>
+            </div>
+            <div class="setup-field" data-param="startingArmySize">
+              <label for="startingArmySizeRange">Starting army size</label>
+              <p class="setup-description">Smaller armies are less forgiving when taking early damage.</p>
+              <div class="setup-inputs">
+                <input id="startingArmySizeRange" type="range" min="1" max="30" step="1" value="1" />
+                <input id="startingArmySizeInput" type="number" min="1" max="30" step="1" value="1" inputmode="numeric" />
+              </div>
+            </div>
+            <button id="startGameBtn" type="submit" class="setup-start-btn">Start Game</button>
+          </form>
+        </div>
+      </section>
       <header class="hud-top">
         <h1>Rolling Road</h1>
         <div id="status" aria-live="polite">Tap or drag to steer.</div>
