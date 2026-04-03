@@ -26,14 +26,22 @@
   const POWER_UP_RADIUS = 72;
   const BASE_ENEMY_HP = 2;
   const POWER_HITS_BASE = 2;
-  const POWER_HITS_PER_LEVEL = 0;
   const ENEMY_HP_LEVEL_THRESHOLD = 2;
   const ENEMY_HP_LEVEL_BONUS = 1;
   const ENEMY_HP_FLANK_BONUS = 1;
   const ENEMY_RATE_PROGRESS_CURVE = 1.12;
   const POWER_RATE_PROGRESS_CURVE = 0.92;
+  const TRAP_RATE_PROGRESS_CURVE = 1.2;
   const TRAP_RATE_START = 0.08;
   const TRAP_RATE_END = 0.55;
+  const MIN_SPAWN_RATE = 0.01;
+  const ENEMY_PATTERN_STRAIGHT_THRESHOLD = 0.55;
+  const ENEMY_PATTERN_ZIGZAG_THRESHOLD = 0.85;
+  const TRAP_PATTERN_STATIC_PROBABILITY = 0.5;
+  const LEVEL_SPEED_STEP = 35;
+  const PROGRESS_SPEED_BOOST = 90;
+  const MILESTONE_SCORE_INTERVAL = 700;
+  const MILESTONE_SPEED_BOOST = 10;
   const SPAWN_JITTER_MIN = 0.82;
   const SPAWN_JITTER_MAX = 1.18;
   const VOLLEY_WIDTH_MULTIPLIER = 1.1;
@@ -60,6 +68,7 @@
   const ARMY_BAR_MAX_UNITS = 180;
   const POWER_GROWTH_MIN_GAIN = 1;
   const POWER_GROWTH_CATCH_UP_BONUS = 2;
+  const POWER_GROWTH_CATCH_UP_THRESHOLD = 12;
   const POWER_TYPE_ICONS = { growth: '+' };
   const SUN_GLOW_RADIUS = 190;
   const MOUNTAIN_LAYER_WIDTH = 260;
@@ -323,9 +332,9 @@
 
   function currentSpeed() {
     const progress = overallProgressRatio();
-    const levelBoost = state.level * 35;
-    const progressBoost = progress * 90;
-    const milestoneBoost = Math.floor(state.score / 700) * 10;
+    const levelBoost = state.level * LEVEL_SPEED_STEP;
+    const progressBoost = progress * PROGRESS_SPEED_BOOST;
+    const milestoneBoost = Math.floor(state.score / MILESTONE_SCORE_INTERVAL) * MILESTONE_SPEED_BOOST;
     return BASE_SCROLL + levelBoost + progressBoost + milestoneBoost;
   }
 
@@ -366,20 +375,28 @@
   }
 
   function currentTrapSpawnRate() {
-    const ratio = easedRatio(overallProgressRatio(), 1.2);
+    const ratio = easedRatio(overallProgressRatio(), TRAP_RATE_PROGRESS_CURVE);
     return lerp(TRAP_RATE_START, TRAP_RATE_END, ratio);
   }
 
   function spawnIntervalFromRate(ratePerSecond) {
-    const safeRate = Math.max(0.01, ratePerSecond);
+    const safeRate = Math.max(MIN_SPAWN_RATE, ratePerSecond);
     const jitter = SPAWN_JITTER_MIN + Math.random() * (SPAWN_JITTER_MAX - SPAWN_JITTER_MIN);
     return (1 / safeRate) * jitter;
+  }
+
+  function selectEnemyPattern() {
+    const roll = Math.random();
+    if (roll < ENEMY_PATTERN_STRAIGHT_THRESHOLD) return 'straight';
+    if (roll < ENEMY_PATTERN_ZIGZAG_THRESHOLD) return 'zigzag';
+    return 'flank';
   }
 
   function currentFireRatePerSecond() {
     const clampedTarget = Math.max(1, TARGET_ARMY_SIZE);
     const clampedArmy = Math.max(1, state.armySize);
-    const ratio = Math.max(0, Math.min(1, (clampedArmy - 1) / (clampedTarget - 1 || 1)));
+    const targetSpan = Math.max(1, clampedTarget - 1);
+    const ratio = Math.max(0, Math.min(1, (clampedArmy - 1) / targetSpan));
     return lerp(BASE_FIRE_RATE_PER_SECOND, TARGET_FIRE_RATE_PER_SECOND, ratio);
   }
 
@@ -401,7 +418,6 @@
   function powerUpMaxHp() {
     const effectiveArmySize = Math.max(1, state.armySize);
     return POWER_HITS_BASE
-      + state.level * POWER_HITS_PER_LEVEL
       + Math.floor((effectiveArmySize - 1) / POWER_HITS_PER_ARMY_STEP);
   }
 
@@ -471,15 +487,14 @@
   function spawnFromRates(dt) {
     state.enemySpawnTimer -= dt;
     while (state.enemySpawnTimer <= 0) {
-      const roll = Math.random();
-      const pattern = roll < 0.55 ? 'straight' : (roll < 0.85 ? 'zigzag' : 'flank');
+      const pattern = selectEnemyPattern();
       spawnEntity({ kind: 'enemy', pattern, x: randomRoadX() });
       state.enemySpawnTimer += spawnIntervalFromRate(currentEnemySpawnRate());
     }
 
     state.trapSpawnTimer -= dt;
     while (state.trapSpawnTimer <= 0) {
-      const pattern = Math.random() < 0.5 ? 'static' : 'timed';
+      const pattern = Math.random() < TRAP_PATTERN_STATIC_PROBABILITY ? 'static' : 'timed';
       spawnEntity({ kind: 'trap', pattern, x: randomRoadX() });
       state.trapSpawnTimer += spawnIntervalFromRate(currentTrapSpawnRate());
     }
@@ -532,7 +547,7 @@
   function applyGrowthPower() {
     const expectedArmy = lerp(1, TARGET_ARMY_SIZE, overallProgressRatio());
     const armyGap = expectedArmy - state.armySize;
-    const catchUpGain = armyGap > 12 ? POWER_GROWTH_CATCH_UP_BONUS : 0;
+    const catchUpGain = armyGap > POWER_GROWTH_CATCH_UP_THRESHOLD ? POWER_GROWTH_CATCH_UP_BONUS : 0;
     const gain = POWER_GROWTH_MIN_GAIN + catchUpGain;
     addUnits(gain);
     state.score += 90;

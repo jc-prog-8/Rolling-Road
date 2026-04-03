@@ -39,7 +39,7 @@
             </div>
             <div class="setup-field" data-param="enemyRateEnd">
               <label for="enemyRateEndRange">Enemy spawn rate at end (per second)</label>
-              <p class="setup-description">How many enemies appear each second near run completion.</p>
+              <p class="setup-description">How many enemies appear each second near run completion (clamped on Start Game to be at least the start rate).</p>
               <div class="setup-inputs">
                 <input id="enemyRateEndRange" type="range" min="1" max="6" step="0.05" value="3" />
                 <input id="enemyRateEndInput" type="number" min="1" max="6" step="0.05" value="3" inputmode="decimal" />
@@ -55,7 +55,7 @@
             </div>
             <div class="setup-field" data-param="powerRateEnd">
               <label for="powerRateEndRange">Power-up spawn rate at end (per second)</label>
-              <p class="setup-description">Growth-pickup appearance rate near run completion.</p>
+              <p class="setup-description">Growth-pickup appearance rate near run completion (clamped on Start Game to be no higher than the start rate).</p>
               <div class="setup-inputs">
                 <input id="powerRateEndRange" type="range" min="0.05" max="1.2" step="0.05" value="0.22" />
                 <input id="powerRateEndInput" type="number" min="0.05" max="1.2" step="0.05" value="0.22" inputmode="decimal" />
