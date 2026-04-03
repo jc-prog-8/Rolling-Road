@@ -7,6 +7,7 @@
   const EXTRA_ENEMY_TIMING_OFFSET = 2.2;
   const EXTRA_POWER_TIMING_OFFSET = 8.2;
   const BURST_ENEMY_TIMING_OFFSET = 7.8;
+  const EXTRA_SEGMENT_ENEMY_TIMING = 9;
   const SPAWN_SEGMENT_LENGTH = 12;
   const ROAD_HORIZON_Y = 90;
   const ROAD_TOP_MIN_X = 0.34;
@@ -25,6 +26,7 @@
   const DENSITY_SPAWN_MULTIPLIER = 0.85;
   const FIRE_INTERVAL_SECONDS = 0.75;
   const SHOT_STAGGER_SECONDS = 0.045;
+  const VOLLEY_WIDTH_MULTIPLIER = 1.35;
   const BASE_PROJECTILE_SPEED = 600;
   const PROJECTILE_SPEED_PER_LEVEL = 35;
   const PROJECTILE_OFFSCREEN_THRESHOLD = -40;
@@ -33,6 +35,12 @@
   const POWER_PROGRESS_BAR_WIDTH_MULTIPLIER = 2.1;
   const POWER_UP_DIAMOND_OFFSET = 3;
   const POWER_UP_ICON_Y_OFFSET = 1;
+  const SPAWN_Y_OFFSET = -16;
+  const ENEMY_SPEED_MIN_MULTIPLIER = 0.62;
+  const ENEMY_SPEED_RANDOM_RANGE = 0.18;
+  const POWER_UP_SPEED_MULTIPLIER = 0.58;
+  const ARMY_SQUARE_MIN_RADIUS = 20;
+  const ARMY_SQUARE_SIZE_RATIO = 0.92;
   const ENEMY_HOLD_LINE_OFFSET = 64;
   const ENEMY_BREACH_TICK_SECONDS = 1;
   const ENTITY_CLEANUP_MARGIN = 120;
@@ -82,6 +90,7 @@
       const segmentLength = SPAWN_SEGMENT_LENGTH;
       for (let seg = 0; seg < LEVEL_DURATION / segmentLength; seg++) {
         const baseT = seg * segmentLength;
+        const isEvenSeg = seg % 2 === 0;
         const laneA = ROAD_TOP_MIN_X + ((seg * 37 + i * 11) % ROAD_TOP_LANE_STEPS) / 100;
         const laneB = ROAD_TOP_MIN_X + ((seg * 53 + i * 7 + 21) % ROAD_TOP_LANE_STEPS) / 100;
         const laneC = ROAD_TOP_MIN_X + ((seg * 29 + i * 13 + 44) % ROAD_TOP_LANE_STEPS) / 100;
@@ -95,9 +104,9 @@
         events.push({ t: baseT + 1, kind: 'enemy', pattern: 'straight', x: laneA });
         events.push({ t: baseT + EXTRA_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: 'straight', x: laneB });
         events.push({ t: baseT + 3.5, kind: 'trap', pattern: seg % 3 === 0 ? 'timed' : 'static', x: laneB });
-        events.push({ t: baseT + 5, kind: 'enemy', pattern: seg % 2 === 0 ? 'zigzag' : 'straight', x: laneC });
+        events.push({ t: baseT + 5, kind: 'enemy', pattern: isEvenSeg ? 'zigzag' : 'straight', x: laneC });
         events.push({ t: baseT + BURST_ENEMY_TIMING_OFFSET, kind: 'enemy', pattern: burstPattern, x: burstX });
-        events.push({ t: baseT + 9, kind: 'enemy', pattern: seg % 2 === 0 ? 'straight' : 'zigzag', x: seg % 2 === 0 ? laneA : laneB });
+        events.push({ t: baseT + EXTRA_SEGMENT_ENEMY_TIMING, kind: 'enemy', pattern: isEvenSeg ? 'straight' : 'zigzag', x: isEvenSeg ? laneA : laneB });
 
         if (seg % 2 === 1) {
           events.push({
@@ -125,9 +134,9 @@
   state.levelDefs = createLevels();
 
   function spawnEntity(ev) {
-    const y = ROAD_HORIZON_Y - 16;
+    const y = ROAD_HORIZON_Y + SPAWN_Y_OFFSET;
     const x = ev.x * canvas.width;
-    const baseSpeed = currentSpeed() * (0.62 + Math.random() * 0.18);
+    const baseSpeed = currentSpeed() * (ENEMY_SPEED_MIN_MULTIPLIER + Math.random() * ENEMY_SPEED_RANDOM_RANGE);
 
     if (ev.kind === 'enemy') {
       const hp = BASE_ENEMY_HP
@@ -171,7 +180,7 @@
         r: POWER_UP_RADIUS,
         hp: POWER_HITS_BASE + state.level * POWER_HITS_PER_LEVEL,
         powerType: ev.p,
-        speed: currentSpeed() * 0.58,
+        speed: currentSpeed() * POWER_UP_SPEED_MULTIPLIER,
       });
     }
   }
@@ -193,7 +202,7 @@
 
   function queueVolley() {
     const shotCount = Math.max(1, Math.floor(state.armySize));
-    const width = formationRangeX() * 1.35;
+    const width = formationRangeX() * VOLLEY_WIDTH_MULTIPLIER;
     for (let i = 0; i < shotCount; i++) {
       const slot = shotCount === 1 ? 0.5 : i / (shotCount - 1);
       const offset = (slot - 0.5) * width;
@@ -548,7 +557,7 @@
     const count = Math.min(state.armySize, 90);
 
     const sideCount = Math.max(1, Math.ceil(Math.sqrt(count)));
-    const maxSquareRadius = Math.max(20, Math.min(w, h) * 0.92);
+    const maxSquareRadius = Math.max(ARMY_SQUARE_MIN_RADIUS, Math.min(w, h) * ARMY_SQUARE_SIZE_RATIO);
     const spacing = sideCount > 1 ? (maxSquareRadius * 2) / (sideCount - 1) : 0;
     const originOffset = (sideCount - 1) * spacing * 0.5;
 
