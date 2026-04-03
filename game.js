@@ -37,8 +37,8 @@
   const ENEMY_BREACH_TICK_SECONDS = 1;
   const ENTITY_CLEANUP_MARGIN = 120;
   const ARMY_BAR_MAX_UNITS = 180;
-  const POWER_GROWTH_MIN_GAIN = 2;
-  const POWER_GROWTH_GAIN_RANGE = 3;
+  const POWER_GROWTH_MIN_GAIN = 1;
+  const POWER_GROWTH_GAIN_RANGE = 1;
   const POWER_TYPE_ICONS = { growth: '+' };
 
   const canvas = document.getElementById('gameCanvas');
@@ -56,7 +56,7 @@
     timeInLevel: 0,
     totalTime: 0,
     score: 0,
-    armySize: 18,
+    armySize: 4,
     touchTargetX: null,
     entities: [],
     projectiles: [],
