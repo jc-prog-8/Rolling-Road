@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+    <title>Rolling Road</title>
+    <link rel="stylesheet" href="/Rolling-Road/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hud-top">
+        <h1>Rolling Road</h1>
+        <div id="status" aria-live="polite">Tap or drag to steer.</div>
+      </header>
+      <canvas id="gameCanvas" width="1280" height="720" aria-label="Rolling Road game"></canvas>
+      <section class="hud-bottom">
+        <div>Level: <span id="levelLabel">1/5</span></div>
+        <div>Time: <span id="timeLabel">0:00</span></div>
+        <div>Army: <span id="armyLabel">0</span></div>
+        <div>Score: <span id="scoreLabel">0</span></div>
+        <div>Roles: <span id="rolesLabel">M:0 R:0 S:0</span></div>
+      </section>
+      <section class="controls-hint">Touch/drag anywhere on the road to move the formation left/right.</section>
+    </main>
+    <script src="/Rolling-Road/game.js"></script>
+  </body>
+</html>
