@@ -77,6 +77,14 @@
                 <input id="startingArmySizeInput" type="number" min="1" max="30" step="1" value="1" inputmode="numeric" />
               </div>
             </div>
+            <div class="setup-field" data-param="canvasHeightPercent">
+              <label for="canvasHeightPercentRange">Game height (% of screen)</label>
+              <p class="setup-description">How much of the screen height the game canvas fills. Increase on mobile for a taller play area.</p>
+              <div class="setup-inputs">
+                <input id="canvasHeightPercentRange" type="range" min="40" max="95" step="5" value="85" />
+                <input id="canvasHeightPercentInput" type="number" min="40" max="95" step="5" value="85" inputmode="numeric" />
+              </div>
+            </div>
             <button id="startGameBtn" type="submit" class="setup-start-btn">Start Game</button>
           </form>
         </div>
