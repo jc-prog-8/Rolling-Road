@@ -113,10 +113,6 @@
   const setupScreenEl = document.getElementById('setupScreen');
   const setupFormEl = document.getElementById('setupForm');
   const pauseBtnEl = document.getElementById('pauseBtn');
-  const saveSettingsBtnEl = document.getElementById('saveSettingsBtn');
-  const loadSettingsBtnEl = document.getElementById('loadSettingsBtn');
-  const settingsPresetNameEl = document.getElementById('settingsPresetName');
-  const settingsPresetSelectEl = document.getElementById('settingsPresetSelect');
   const applyChangesBtnEl = document.getElementById('applyChangesBtn');
   const startGameBtnEl = document.getElementById('startGameBtn');
 
@@ -145,8 +141,6 @@
     powerSpawnTimer: 0,
     pointerActive: false,
   };
-  const NAMED_SETTINGS_STORAGE_KEY = 'rollingRoad.namedSetup_v1';
-  const AUTO_SAVE_PRESET_NAME = 'autosave';
 
   const setupConfig = {
     runDurationMinutes: {
@@ -282,33 +276,8 @@
     }
   }
 
-  function loadNamedSettingsFromStorage() {
-    try {
-      const raw = localStorage.getItem(NAMED_SETTINGS_STORAGE_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (e) {
-      return {};
-    }
-  }
-
-  function saveNamedSettingsToStorage(valuesByName) {
-    try {
-      localStorage.setItem(NAMED_SETTINGS_STORAGE_KEY, JSON.stringify(valuesByName));
-    } catch (e) {
-      // ignore storage errors
-    }
-  }
-
   function saveGameStartToAutosave(values) {
-    const named = loadNamedSettingsFromStorage();
-    named[AUTO_SAVE_PRESET_NAME] = {
-      ...values,
-      armySize: values.startingArmySize,
-    };
-    saveNamedSettingsToStorage(named);
-    populatePresetSelect();
+    saveSetupToStorage(values);
   }
 
   function readLiveSettingValues() {
@@ -382,12 +351,6 @@
       setupConfig.startingArmySize.max = armyMax;
     }
 
-    // Save button: only active at start (not during the game)
-    if (saveSettingsBtnEl) {
-      saveSettingsBtnEl.disabled = isPaused;
-      saveSettingsBtnEl.classList.toggle('settings-locked', isPaused);
-    }
-
     // Show Start Game button only when not paused; show Apply Changes when paused
     if (startGameBtnEl) startGameBtnEl.style.display = isPaused ? 'none' : '';
     if (applyChangesBtnEl) applyChangesBtnEl.style.display = isPaused ? '' : 'none';
@@ -400,120 +363,6 @@
     syncPair('powerRateEnd', POWER_RATE_END);
     syncPair('targetArmySize', TARGET_ARMY_SIZE);
     syncPair('startingArmySize', Math.max(1, state.armySize));
-  }
-
-  function writeSetupValuesToInputs(values) {
-    for (const [paramName, cfg] of Object.entries(setupConfig)) {
-      const raw = values[paramName];
-      if (raw === undefined) continue;
-      const next = clampValue(cfg.parse(raw), cfg);
-      syncPair(paramName, next);
-    }
-  }
-
-  function readCurrentSettingsSnapshot() {
-    if (!state.started || !setupScreenEl || setupScreenEl.classList.contains('hidden')) {
-      return {
-        runDurationMinutes: RUN_DURATION_MINUTES,
-        targetArmySize: TARGET_ARMY_SIZE,
-        enemyRateStart: ENEMY_RATE_START,
-        enemyRateEnd: ENEMY_RATE_END,
-        powerRateStart: POWER_RATE_START,
-        powerRateEnd: POWER_RATE_END,
-        baseScroll: BASE_SCROLL,
-        armySize: Math.max(1, state.armySize),
-        canvasHeightPercent: CANVAS_HEIGHT_PERCENT,
-      };
-    }
-    return readSetupValues();
-  }
-
-  function readSavedArmySize(values, preferArmySizeOverStarting) {
-    const primary = preferArmySizeOverStarting ? values.armySize : values.startingArmySize;
-    const fallback = preferArmySizeOverStarting ? values.startingArmySize : values.armySize;
-    const parsed = Number.parseInt(primary ?? fallback, 10);
-    return Math.max(1, parsed || state.armySize);
-  }
-
-  function populatePresetSelect() {
-    if (!settingsPresetSelectEl) return;
-    const named = loadNamedSettingsFromStorage();
-    settingsPresetSelectEl.innerHTML = '';
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = 'Select saved settings';
-    settingsPresetSelectEl.appendChild(placeholder);
-    for (const name of Object.keys(named).sort((a, b) => a.localeCompare(b))) {
-      const option = document.createElement('option');
-      option.value = name;
-      option.textContent = name;
-      settingsPresetSelectEl.appendChild(option);
-    }
-  }
-
-  function saveNamedSettings() {
-    if (state.started && state.running) {
-      statusEl.textContent = 'Cannot save settings during the game.';
-      return;
-    }
-    const name = (settingsPresetNameEl?.value || '').trim();
-    if (!name) {
-      statusEl.textContent = 'Enter a settings name before saving.';
-      return;
-    }
-    const named = loadNamedSettingsFromStorage();
-    named[name] = readCurrentSettingsSnapshot();
-    saveNamedSettingsToStorage(named);
-    populatePresetSelect();
-    if (settingsPresetSelectEl) settingsPresetSelectEl.value = name;
-    statusEl.textContent = `Saved settings "${name}".`;
-  }
-
-  function loadNamedSettings() {
-    const name = settingsPresetSelectEl?.value || '';
-    if (!name) return;
-    const named = loadNamedSettingsFromStorage();
-    const values = named[name];
-    if (!values) return;
-
-    if (state.running && !state.paused) {
-      statusEl.textContent = 'Cannot load settings while playing. Please pause the game first.';
-      return;
-    }
-
-    if (!state.started) {
-      writeSetupValuesToInputs(values);
-      saveSetupToStorage(readSetupValues());
-      ENEMY_RATE_START = clampValue(Number.parseFloat(values.enemyRateStart), setupConfig.enemyRateStart);
-      ENEMY_RATE_END = Math.max(ENEMY_RATE_START, clampValue(Number.parseFloat(values.enemyRateEnd), setupConfig.enemyRateEnd));
-      POWER_RATE_START = clampValue(Number.parseFloat(values.powerRateStart), setupConfig.powerRateStart);
-      POWER_RATE_END = Math.min(POWER_RATE_START, clampValue(Number.parseFloat(values.powerRateEnd), setupConfig.powerRateEnd));
-      TARGET_ARMY_SIZE = clampValue(Number.parseInt(values.targetArmySize, 10), setupConfig.targetArmySize);
-      state.armySize = readSavedArmySize(values, false);
-    } else if (state.paused) {
-      ENEMY_RATE_START = values.enemyRateStart === undefined
-        ? ENEMY_RATE_START
-        : clampValue(Number.parseFloat(values.enemyRateStart), setupConfig.enemyRateStart);
-      ENEMY_RATE_END = values.enemyRateEnd === undefined
-        ? ENEMY_RATE_END
-        : clampValue(Number.parseFloat(values.enemyRateEnd), setupConfig.enemyRateEnd);
-      ENEMY_RATE_END = Math.max(ENEMY_RATE_START, ENEMY_RATE_END);
-      POWER_RATE_START = values.powerRateStart === undefined
-        ? POWER_RATE_START
-        : clampValue(Number.parseFloat(values.powerRateStart), setupConfig.powerRateStart);
-      POWER_RATE_END = values.powerRateEnd === undefined
-        ? POWER_RATE_END
-        : clampValue(Number.parseFloat(values.powerRateEnd), setupConfig.powerRateEnd);
-      POWER_RATE_END = Math.min(POWER_RATE_START, POWER_RATE_END);
-      TARGET_ARMY_SIZE = values.targetArmySize === undefined
-        ? TARGET_ARMY_SIZE
-        : clampValue(Number.parseInt(values.targetArmySize, 10), setupConfig.targetArmySize);
-      state.armySize = readSavedArmySize(values, true);
-    }
-
-    syncLiveControlsFromCurrentState();
-    updateHud();
-    statusEl.textContent = `Loaded settings "${name}".`;
   }
 
   function applyPausedLiveSettings() {
@@ -595,7 +444,6 @@
         syncPair(paramName, next);
       }
     }
-    populatePresetSelect();
     syncLiveControlsFromCurrentState();
     updateSettingsUiState();
 
@@ -612,8 +460,6 @@
       applySetupValues(setupValues);
       saveSetupToStorage(setupValues);
     });
-    saveSettingsBtnEl?.addEventListener('click', saveNamedSettings);
-    loadSettingsBtnEl?.addEventListener('click', loadNamedSettings);
     applyChangesBtnEl?.addEventListener('click', applyPausedLiveSettings);
   }
 
