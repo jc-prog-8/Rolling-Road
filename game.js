@@ -1,7 +1,6 @@
 (() => {
-  const LEVEL_COUNT = 1;
   const DEFAULT_RUN_DURATION_MINUTES = 10;
-  const DEFAULT_LEVEL_DURATION = (DEFAULT_RUN_DURATION_MINUTES * 60) / LEVEL_COUNT;
+  const DEFAULT_LEVEL_DURATION = DEFAULT_RUN_DURATION_MINUTES * 60;
   const DEFAULT_BASE_SCROLL = 85;
   const DEFAULT_TARGET_ARMY_SIZE = 200;
   const DEFAULT_ENEMY_RATE_START = 0.35;
@@ -421,7 +420,7 @@
   function applySetupValues(values) {
     saveGameStartToAutosave(values);
     RUN_DURATION_MINUTES = values.runDurationMinutes;
-    LEVEL_DURATION = (RUN_DURATION_MINUTES * 60) / LEVEL_COUNT;
+    LEVEL_DURATION = RUN_DURATION_MINUTES * 60;
     BASE_SCROLL = values.baseScroll;
     TARGET_ARMY_SIZE = values.targetArmySize;
     ENEMY_RATE_START = values.enemyRateStart;
@@ -567,8 +566,8 @@
   }
 
   function overallProgressRatio() {
-    const totalDuration = LEVEL_COUNT * LEVEL_DURATION;
-    const elapsed = state.level * LEVEL_DURATION + state.timeInLevel;
+    const totalDuration = LEVEL_DURATION;
+    const elapsed = state.timeInLevel;
     return Math.max(0, Math.min(1, elapsed / totalDuration));
   }
 
@@ -718,10 +717,6 @@
     });
   }
 
-  function updateLevelProgression() {
-    // Endless mode: no level transitions or playfield resets.
-  }
-
   function spawnFromRates(dt) {
     state.enemySpawnTimer -= dt;
     while (state.enemySpawnTimer <= 0) {
@@ -750,7 +745,6 @@
     updateEntities(dt);
     updateFiring(dt);
     updateProjectiles(dt);
-    updateLevelProgression();
     updateFx(dt);
     updateHud();
   }
