@@ -105,12 +105,29 @@
   const timeEl = document.getElementById('timeLabel');
   const armyEl = document.getElementById('armyLabel');
   const scoreEl = document.getElementById('scoreLabel');
+  const enemyRateEl = document.getElementById('enemyRateLabel');
+  const powerRateEl = document.getElementById('powerRateLabel');
+  const fireRateEl = document.getElementById('fireRateLabel');
+  const progressEl = document.getElementById('progressLabel');
   const setupScreenEl = document.getElementById('setupScreen');
   const setupFormEl = document.getElementById('setupForm');
+  const pauseBtnEl = document.getElementById('pauseBtn');
+  const saveSettingsBtnEl = document.getElementById('saveSettingsBtn');
+  const loadSettingsBtnEl = document.getElementById('loadSettingsBtn');
+  const settingsPresetNameEl = document.getElementById('settingsPresetName');
+  const settingsPresetSelectEl = document.getElementById('settingsPresetSelect');
+  const applyLiveSettingsBtnEl = document.getElementById('applyLiveSettingsBtn');
+  const liveEnemyRateStartEl = document.getElementById('liveEnemyRateStart');
+  const liveEnemyRateEndEl = document.getElementById('liveEnemyRateEnd');
+  const livePowerRateStartEl = document.getElementById('livePowerRateStart');
+  const livePowerRateEndEl = document.getElementById('livePowerRateEnd');
+  const liveTargetArmySizeEl = document.getElementById('liveTargetArmySize');
+  const liveArmySizeEl = document.getElementById('liveArmySize');
 
   const state = {
     running: false,
     started: false,
+    paused: false,
     victory: false,
     level: 0,
     timeInLevel: 0,
@@ -132,6 +149,7 @@
     powerSpawnTimer: 0,
     pointerActive: false,
   };
+  const NAMED_SETTINGS_STORAGE_KEY = 'rollingRoad.namedSetup_v1';
 
   const setupConfig = {
     runDurationMinutes: {
@@ -267,6 +285,140 @@
     }
   }
 
+  function loadNamedSettingsFromStorage() {
+    try {
+      const raw = localStorage.getItem(NAMED_SETTINGS_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveNamedSettingsToStorage(valuesByName) {
+    try {
+      localStorage.setItem(NAMED_SETTINGS_STORAGE_KEY, JSON.stringify(valuesByName));
+    } catch (e) {
+      // ignore storage errors
+    }
+  }
+
+  function readLiveSettingValues() {
+    const values = {
+      enemyRateStart: clampValue(Number.parseFloat(liveEnemyRateStartEl?.value), setupConfig.enemyRateStart),
+      enemyRateEnd: clampValue(Number.parseFloat(liveEnemyRateEndEl?.value), setupConfig.enemyRateEnd),
+      powerRateStart: clampValue(Number.parseFloat(livePowerRateStartEl?.value), setupConfig.powerRateStart),
+      powerRateEnd: clampValue(Number.parseFloat(livePowerRateEndEl?.value), setupConfig.powerRateEnd),
+      targetArmySize: clampValue(Number.parseInt(liveTargetArmySizeEl?.value, 10), setupConfig.targetArmySize),
+      armySize: Math.max(1, Number.parseInt(liveArmySizeEl?.value, 10) || state.armySize),
+    };
+    return values;
+  }
+
+  function syncLiveControlsFromCurrentState() {
+    if (!liveEnemyRateStartEl) return;
+    liveEnemyRateStartEl.value = `${ENEMY_RATE_START}`;
+    liveEnemyRateEndEl.value = `${ENEMY_RATE_END}`;
+    livePowerRateStartEl.value = `${POWER_RATE_START}`;
+    livePowerRateEndEl.value = `${POWER_RATE_END}`;
+    liveTargetArmySizeEl.value = `${TARGET_ARMY_SIZE}`;
+    liveArmySizeEl.value = `${Math.max(1, state.armySize)}`;
+  }
+
+  function writeSetupValuesToInputs(values) {
+    for (const [paramName, cfg] of Object.entries(setupConfig)) {
+      const raw = values[paramName];
+      if (raw === undefined) continue;
+      const next = clampValue(cfg.parse(raw), cfg);
+      syncPair(paramName, next);
+    }
+  }
+
+  function readCurrentSettingsSnapshot() {
+    const showingSetup = !!setupScreenEl && !setupScreenEl.classList.contains('hidden');
+    if (!state.started || showingSetup) {
+      return readSetupValues();
+    }
+    return {
+      runDurationMinutes: RUN_DURATION_MINUTES,
+      targetArmySize: TARGET_ARMY_SIZE,
+      enemyRateStart: ENEMY_RATE_START,
+      enemyRateEnd: ENEMY_RATE_END,
+      powerRateStart: POWER_RATE_START,
+      powerRateEnd: POWER_RATE_END,
+      baseScroll: BASE_SCROLL,
+      startingArmySize: Math.max(1, state.armySize),
+      canvasHeightPercent: CANVAS_HEIGHT_PERCENT,
+    };
+  }
+
+  function populatePresetSelect() {
+    if (!settingsPresetSelectEl) return;
+    const named = loadNamedSettingsFromStorage();
+    settingsPresetSelectEl.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select saved settings';
+    settingsPresetSelectEl.appendChild(placeholder);
+    for (const name of Object.keys(named).sort((a, b) => a.localeCompare(b))) {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      settingsPresetSelectEl.appendChild(option);
+    }
+  }
+
+  function saveNamedSettings() {
+    const name = (settingsPresetNameEl?.value || '').trim();
+    if (!name) {
+      statusEl.textContent = 'Enter a settings name before saving.';
+      return;
+    }
+    const named = loadNamedSettingsFromStorage();
+    named[name] = readCurrentSettingsSnapshot();
+    saveNamedSettingsToStorage(named);
+    populatePresetSelect();
+    if (settingsPresetSelectEl) settingsPresetSelectEl.value = name;
+    statusEl.textContent = `Saved settings "${name}".`;
+  }
+
+  function loadNamedSettings() {
+    const name = settingsPresetSelectEl?.value || '';
+    if (!name) return;
+    const named = loadNamedSettingsFromStorage();
+    const values = named[name];
+    if (!values) return;
+    writeSetupValuesToInputs(values);
+    saveSetupToStorage(readSetupValues());
+    ENEMY_RATE_START = clampValue(Number.parseFloat(values.enemyRateStart), setupConfig.enemyRateStart);
+    ENEMY_RATE_END = Math.max(ENEMY_RATE_START, clampValue(Number.parseFloat(values.enemyRateEnd), setupConfig.enemyRateEnd));
+    POWER_RATE_START = clampValue(Number.parseFloat(values.powerRateStart), setupConfig.powerRateStart);
+    POWER_RATE_END = Math.min(POWER_RATE_START, clampValue(Number.parseFloat(values.powerRateEnd), setupConfig.powerRateEnd));
+    TARGET_ARMY_SIZE = clampValue(Number.parseInt(values.targetArmySize, 10), setupConfig.targetArmySize);
+    state.armySize = Math.max(1, Number.parseInt(values.startingArmySize, 10) || state.armySize);
+    syncLiveControlsFromCurrentState();
+    updateHud();
+    statusEl.textContent = `Loaded settings "${name}".`;
+  }
+
+  function applyPausedLiveSettings() {
+    if (!state.paused) {
+      statusEl.textContent = 'Pause the game to apply live difficulty and army changes.';
+      return;
+    }
+    const values = readLiveSettingValues();
+    ENEMY_RATE_START = values.enemyRateStart;
+    ENEMY_RATE_END = Math.max(values.enemyRateStart, values.enemyRateEnd);
+    POWER_RATE_START = values.powerRateStart;
+    POWER_RATE_END = Math.min(values.powerRateStart, values.powerRateEnd);
+    TARGET_ARMY_SIZE = values.targetArmySize;
+    state.armySize = values.armySize;
+    syncLiveControlsFromCurrentState();
+    updateHud();
+    statusEl.textContent = 'Paused settings applied.';
+  }
+
   function readSetupValues() {
     const values = {};
     for (const [paramName, cfg] of Object.entries(setupConfig)) {
@@ -307,6 +459,9 @@
     state.victory = false;
     state.running = true;
     state.started = true;
+    state.paused = false;
+    if (pauseBtnEl) pauseBtnEl.textContent = 'Pause';
+    syncLiveControlsFromCurrentState();
     updateHud();
     statusEl.textContent = 'Game started. Tap or drag to steer.';
   }
@@ -324,6 +479,8 @@
         syncPair(paramName, next);
       }
     }
+    populatePresetSelect();
+    syncLiveControlsFromCurrentState();
 
     // Persist on any input change so users won't lose tweaks accidentally
     setupFormEl.addEventListener('input', () => {
@@ -337,6 +494,9 @@
       saveSetupToStorage(setupValues);
       if (setupScreenEl) setupScreenEl.classList.add('hidden');
     });
+    saveSettingsBtnEl?.addEventListener('click', saveNamedSettings);
+    loadSettingsBtnEl?.addEventListener('click', loadNamedSettings);
+    applyLiveSettingsBtnEl?.addEventListener('click', applyPausedLiveSettings);
   }
 
   function resizeCanvas(canvasHeightPercent) {
@@ -589,10 +749,26 @@
   }
 
   function updateState(dt) {
+    if (state.paused) {
+      updateHud();
+      return;
+    }
     updateGameTimers(dt);
     updateMovement();
     updateRoadOffsets(dt);
     updateCore(dt);
+  }
+
+  function togglePause() {
+    if (!state.started || !state.running) return;
+    state.paused = !state.paused;
+    if (pauseBtnEl) pauseBtnEl.textContent = state.paused ? 'Resume' : 'Pause';
+    if (state.paused) {
+      syncLiveControlsFromCurrentState();
+      statusEl.textContent = 'Paused. Adjust settings, then resume.';
+    } else {
+      statusEl.textContent = 'Resumed.';
+    }
   }
 
   function endRun(reason) {
@@ -725,32 +901,48 @@
 
     for (const p of state.projectiles) {
       if (p.y < PROJECTILE_OFFSCREEN_THRESHOLD) continue;
+      const touchingEnemies = [];
       for (const e of state.entities) {
-        if (e.kind !== 'enemy' && e.kind !== 'power') continue;
-        const rx = e.kind === 'enemy' ? (e.w * 0.5 + p.r) : (e.r + p.r);
-        const ry = e.kind === 'enemy' ? (e.h * 0.5 + p.r) : (e.r + p.r);
-        const nx = (e.x - p.x) / rx;
-        const ny = (e.y - p.y) / ry;
-        if (nx * nx + ny * ny <= 1) {
-          p.destroyed = true;
-          if (e.kind === 'power') {
-            e.hp -= 1;
-            state.fx.push({ type: 'hit', x: e.x, y: e.y, ttl: 0.18 });
-            if (e.hp <= 0) {
-              e.destroyed = true;
-              applyGrowthPower();
-              state.fx.push({ type: 'pickup', x: e.x, y: e.y, ttl: 0.45 });
-            }
-          } else {
-            e.hp -= 1;
-            state.fx.push({ type: 'hit', x: e.x, y: e.y, ttl: 0.2 });
-            if (e.hp <= 0) {
-              e.destroyed = true;
-              state.score += 22 + state.level * 3;
-            }
+        if (e.kind === 'enemy' && e.anchored) touchingEnemies.push(e);
+      }
+      const resolveProjectileHit = (target) => {
+        const rx = target.kind === 'enemy' ? (target.w * 0.5 + p.r) : (target.r + p.r);
+        const ry = target.kind === 'enemy' ? (target.h * 0.5 + p.r) : (target.r + p.r);
+        const nx = (target.x - p.x) / rx;
+        const ny = (target.y - p.y) / ry;
+        if (nx * nx + ny * ny > 1) return false;
+        p.destroyed = true;
+        if (target.kind === 'power') {
+          target.hp -= 1;
+          state.fx.push({ type: 'hit', x: target.x, y: target.y, ttl: 0.18 });
+          if (target.hp <= 0) {
+            target.destroyed = true;
+            applyGrowthPower();
+            state.fx.push({ type: 'pickup', x: target.x, y: target.y, ttl: 0.45 });
           }
+        } else {
+          target.hp -= 1;
+          state.fx.push({ type: 'hit', x: target.x, y: target.y, ttl: 0.2 });
+          if (target.hp <= 0) {
+            target.destroyed = true;
+            state.score += 22 + state.level * 3;
+          }
+        }
+        return true;
+      };
+
+      let hit = false;
+      for (const e of touchingEnemies) {
+        if (resolveProjectileHit(e)) {
+          hit = true;
           break;
         }
+      }
+      if (hit) continue;
+
+      for (const e of state.entities) {
+        if (e.kind !== 'enemy' && e.kind !== 'power') continue;
+        if (resolveProjectileHit(e)) break;
       }
     }
 
@@ -1241,6 +1433,10 @@
     timeEl.textContent = `${mins}:${secs}`;
     armyEl.textContent = `${state.armySize}`;
     scoreEl.textContent = `${Math.floor(state.score)}`;
+    if (enemyRateEl) enemyRateEl.textContent = `${currentEnemySpawnRate().toFixed(2)}/s`;
+    if (powerRateEl) powerRateEl.textContent = `${currentPowerSpawnRate().toFixed(2)}/s`;
+    if (fireRateEl) fireRateEl.textContent = `${currentFireRatePerSecond().toFixed(2)}/s`;
+    if (progressEl) progressEl.textContent = `${Math.round(overallProgressRatio() * 100)}%`;
   }
 
   function pointerX(evt) {
@@ -1271,9 +1467,15 @@
       state.touchTargetX = null;
     });
     window.addEventListener('keydown', (e) => {
+      if (e.key === 'p' || e.key === 'P') {
+        togglePause();
+        return;
+      }
+      if (state.paused) return;
       updatePlayerFromKeyboard(e);
       clampPlayerX();
     });
+    pauseBtnEl?.addEventListener('click', togglePause);
   }
 
   initSetupScreen();
