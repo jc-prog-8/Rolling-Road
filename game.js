@@ -23,6 +23,7 @@
   const ROAD_HORIZON_Y = 20;
   const ROAD_TOP_MIN_X = 0.14;
   const ROAD_TOP_SPAN_X = 0.72;
+  const ROAD_LANE_COUNT = 3;
   const ENEMY_SIZE_SCALE = 0.75;
   const ENEMY_WIDTH = 108 * ENEMY_SIZE_SCALE;
   const ENEMY_HEIGHT = 69 * ENEMY_SIZE_SCALE;
@@ -72,6 +73,7 @@
   const ARMY_BAR_MAX_UNITS = 180;
   const PAUSED_ARMY_MAX = 300;
   const POWER_SHOTS_MAX_VISUAL_SCALE = 30;
+  const POWER_SHOTS_MAX_CHARGE = 30;
   const SUN_GLOW_RADIUS = 190;
   const MOUNTAIN_LAYER_WIDTH = 260;
   const MOUNTAIN_TILE_START_X = -320;
@@ -142,6 +144,7 @@
     pointerActive: false,
   };
   const NAMED_SETTINGS_STORAGE_KEY = 'rollingRoad.namedSetup_v1';
+  const AUTO_SAVE_PRESET_NAME = 'autosave';
 
   const setupConfig = {
     runDurationMinutes: {
@@ -294,6 +297,16 @@
     } catch (e) {
       // ignore storage errors
     }
+  }
+
+  function autoSaveStartSettings(values) {
+    const named = loadNamedSettingsFromStorage();
+    named[AUTO_SAVE_PRESET_NAME] = {
+      ...values,
+      armySize: values.startingArmySize,
+    };
+    saveNamedSettingsToStorage(named);
+    populatePresetSelect();
   }
 
   function readLiveSettingValues() {
@@ -530,6 +543,7 @@
   }
 
   function applySetupValues(values) {
+    autoSaveStartSettings(values);
     RUN_DURATION_MINUTES = values.runDurationMinutes;
     LEVEL_DURATION = (RUN_DURATION_MINUTES * 60) / LEVEL_COUNT;
     BASE_SCROLL = values.baseScroll;
@@ -611,7 +625,8 @@
 
   function spawnEntity(ev) {
     const y = ROAD_HORIZON_Y + SPAWN_Y_OFFSET;
-    const x = ev.x * canvas.width;
+    const spawnRoadX = Number.isFinite(ev.x) ? ev.x : roadXForLane(ev.laneNumber);
+    const x = spawnRoadX * canvas.width;
     const baseSpeed = currentSpeed() * (ENEMY_SPEED_MIN_MULTIPLIER + Math.random() * ENEMY_SPEED_RANDOM_RANGE);
 
     if (ev.kind === 'enemy') {
@@ -626,6 +641,7 @@
         h: ENEMY_HEIGHT,
         hp,
         pattern: ev.pattern,
+        laneNumber: ev.laneNumber,
         phase: Math.random() * Math.PI * 2,
         vx: 0,
         speed: baseSpeed,
@@ -654,6 +670,7 @@
         y,
         r: POWER_UP_RADIUS,
         shotsHit: 0,
+        laneNumber: ev.laneNumber,
         powerType: ev.p,
         speed: currentSpeed() * POWER_UP_SPEED_MULTIPLIER,
       });
@@ -692,6 +709,31 @@
 
   function randomRoadX() {
     return ROAD_TOP_MIN_X + Math.random() * ROAD_TOP_SPAN_X;
+  }
+
+  function randomRoadLane(excludedLanes = new Set()) {
+    const openLanes = [];
+    for (let lane = 0; lane < ROAD_LANE_COUNT; lane += 1) {
+      if (!excludedLanes.has(lane)) openLanes.push(lane);
+    }
+    const lanePool = openLanes.length > 0 ? openLanes : Array.from({ length: ROAD_LANE_COUNT }, (_, i) => i);
+    return lanePool[Math.floor(Math.random() * lanePool.length)];
+  }
+
+  function roadXForLane(laneNumber) {
+    if (ROAD_LANE_COUNT <= 1) return ROAD_TOP_MIN_X + ROAD_TOP_SPAN_X * 0.5;
+    const laneRatio = laneNumber / (ROAD_LANE_COUNT - 1);
+    return ROAD_TOP_MIN_X + ROAD_TOP_SPAN_X * laneRatio;
+  }
+
+  function occupiedPowerLanes() {
+    const lanes = new Set();
+    for (const entity of state.entities) {
+      if (entity.kind === 'power' && Number.isInteger(entity.laneNumber)) {
+        lanes.add(entity.laneNumber);
+      }
+    }
+    return lanes;
   }
 
   function currentEnemySpawnRate() {
@@ -814,7 +856,8 @@
     state.enemySpawnTimer -= dt;
     while (state.enemySpawnTimer <= 0) {
       const pattern = selectEnemyPattern();
-      spawnEntity({ kind: 'enemy', pattern, x: randomRoadX() });
+      const laneNumber = randomRoadLane(occupiedPowerLanes());
+      spawnEntity({ kind: 'enemy', pattern, laneNumber });
       state.enemySpawnTimer += spawnIntervalFromRate(currentEnemySpawnRate());
     }
 
@@ -827,7 +870,7 @@
 
     state.powerSpawnTimer -= dt;
     while (state.powerSpawnTimer <= 0) {
-      spawnEntity({ kind: 'power', p: 'growth', x: randomRoadX() });
+      spawnEntity({ kind: 'power', p: 'growth', laneNumber: randomRoadLane() });
       state.powerSpawnTimer += spawnIntervalFromRate(currentPowerSpawnRate());
     }
   }
@@ -985,13 +1028,11 @@
           return false;
         }
       } else if (e.kind === 'power') {
-        // When power-up reaches the player's level, check if army intercepts it
-        if (e.y >= py) {
-          const dx = Math.abs(e.x - px);
-          if (dx < e.r + formationW) {
-            applyGrowthPowerByShots(e.shotsHit || 0);
-            state.fx.push({ type: 'pickup', x: e.x, y: py, ttl: 0.45 });
-          }
+        const nx = (e.x - px) / (formationW + e.r);
+        const ny = (e.y - (py - 20)) / (formationH + e.r);
+        if (nx * nx + ny * ny <= 1) {
+          applyGrowthPowerByShots(e.shotsHit || 0);
+          state.fx.push({ type: 'pickup', x: e.x, y: e.y, ttl: 0.45 });
           return false;
         }
       }
@@ -1016,12 +1057,13 @@
         const nx = (target.x - p.x) / rx;
         const ny = (target.y - p.y) / ry;
         if (nx * nx + ny * ny > 1) return false;
-        p.destroyed = true;
         if (target.kind === 'power') {
-          // Accumulate shots – power-up is not destroyed by projectile hits
-          target.shotsHit = (target.shotsHit || 0) + 1;
+          if ((target.shotsHit || 0) >= POWER_SHOTS_MAX_CHARGE) return false;
+          p.destroyed = true;
+          target.shotsHit = Math.min(POWER_SHOTS_MAX_CHARGE, (target.shotsHit || 0) + 1);
           state.fx.push({ type: 'hit', x: target.x, y: target.y, ttl: 0.18 });
         } else {
+          p.destroyed = true;
           target.hp -= 1;
           state.fx.push({ type: 'hit', x: target.x, y: target.y, ttl: 0.2 });
           if (target.hp <= 0) {
