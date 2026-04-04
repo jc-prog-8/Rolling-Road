@@ -9,6 +9,8 @@
   const DEFAULT_POWER_RATE_START = 0.4;
   const DEFAULT_POWER_RATE_END = 0.22;
   const DEFAULT_STARTING_ARMY_SIZE = 1;
+  const DEFAULT_CANVAS_HEIGHT_PERCENT = 85;
+  const DEFAULT_CANVAS_WIDTH = 1280;
   const BASE_FIRE_RATE_PER_SECOND = 1;
   const TARGET_FIRE_RATE_PER_SECOND = 20;
   let RUN_DURATION_MINUTES = DEFAULT_RUN_DURATION_MINUTES;
@@ -82,6 +84,7 @@
   let ENEMY_RATE_END = DEFAULT_ENEMY_RATE_END;
   let POWER_RATE_START = DEFAULT_POWER_RATE_START;
   let POWER_RATE_END = DEFAULT_POWER_RATE_END;
+  let CANVAS_HEIGHT_PERCENT = DEFAULT_CANVAS_HEIGHT_PERCENT;
   const ROAD_TILE_INSET_RATIO = 0.06;
   const ROAD_SIDE_LINE_GAP = 34;
   const ROAD_SIDE_LINE_LENGTH = 18;
@@ -183,6 +186,13 @@
       max: 30,
       step: 1,
       parse: (value) => Number.parseInt(value, 10)
+    },
+    canvasHeightPercent: {
+      defaultValue: DEFAULT_CANVAS_HEIGHT_PERCENT,
+      min: 40,
+      max: 95,
+      step: 5,
+      parse: (value) => Number.parseInt(value, 10)
     }
   };
 
@@ -274,7 +284,11 @@
     ENEMY_RATE_END = Math.max(values.enemyRateStart, values.enemyRateEnd);
     POWER_RATE_START = values.powerRateStart;
     POWER_RATE_END = Math.min(values.powerRateStart, values.powerRateEnd);
+    CANVAS_HEIGHT_PERCENT = values.canvasHeightPercent;
+    resizeCanvas(CANVAS_HEIGHT_PERCENT);
     state.armySize = values.startingArmySize;
+    state.playerX = canvas.width * 0.5;
+    state.playerY = canvas.height - PLAYER_BOTTOM_PADDING;
     state.level = 0;
     state.timeInLevel = 0;
     state.totalTime = 0;
@@ -320,6 +334,14 @@
       saveSetupToStorage(setupValues);
       if (setupScreenEl) setupScreenEl.classList.add('hidden');
     });
+  }
+
+  function resizeCanvas(canvasHeightPercent) {
+    const displayWidth = canvas.offsetWidth > 0 ? canvas.offsetWidth : Math.min(window.innerWidth, 1100);
+    const targetDisplayHeight = Math.round(window.innerHeight * canvasHeightPercent / 100);
+    const scale = Math.min(2, DEFAULT_CANVAS_WIDTH / Math.max(1, displayWidth));
+    canvas.width = Math.round(displayWidth * scale);
+    canvas.height = Math.round(targetDisplayHeight * scale);
   }
 
   function spawnEntity(ev) {
