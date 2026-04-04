@@ -45,6 +45,10 @@ body {
   display: none;
 }
 
+.settings-panel.hidden {
+  display: none;
+}
+
 .setup-card h2 {
   margin: 0;
   font-size: 1.2rem;
@@ -229,6 +233,10 @@ h1 {
 
 .settings-row button {
   cursor: pointer;
+}
+
+.settings-locked {
+  opacity: 0.5;
 }
 
 .controls-hint {
