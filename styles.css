@@ -107,8 +107,46 @@ body {
   padding: 0.34rem 0.38rem;
 }
 
-.setup-start-btn {
+.setup-presets {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto minmax(120px, 1fr) auto;
+  gap: 0.45rem;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.setup-presets label {
+  font-size: 0.85rem;
+  color: #cde6f4;
+}
+
+.setup-presets input,
+.setup-presets select,
+.setup-presets button {
+  background: #0b2133;
+  border: 1px solid #4f7895;
+  border-radius: 8px;
+  color: #effaff;
+  font-size: 0.86rem;
+  padding: 0.3rem 0.35rem;
+}
+
+.setup-presets button {
+  cursor: pointer;
+}
+
+.setup-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
   margin-top: 0.2rem;
+}
+
+.setup-actions button:only-child {
+  grid-column: 1 / -1;
+}
+
+.setup-start-btn {
   border: 1px solid #76dfff;
   border-radius: 10px;
   background: linear-gradient(180deg, #4acdf0 0%, #2ea7d1 100%);
@@ -252,8 +290,10 @@ h1 {
   .setup-inputs {
     grid-template-columns: minmax(0, 1fr);
   }
-  .settings-row,
-  .settings-row.settings-presets {
+  .setup-presets {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .setup-actions {
     grid-template-columns: minmax(0, 1fr);
   }
 }
