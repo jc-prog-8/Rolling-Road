@@ -319,8 +319,9 @@
   }
 
   function currentSettingsMode() {
-    if (!state.started || !state.running) return 'setup';
+    if (!state.started) return 'setup';
     if (state.paused) return 'paused';
+    if (!state.running) return 'ended';
     return 'playing';
   }
 
@@ -391,10 +392,16 @@
       powerRateStart: POWER_RATE_START,
       powerRateEnd: POWER_RATE_END,
       baseScroll: BASE_SCROLL,
-      startingArmySize: Math.max(1, state.armySize),
       armySize: Math.max(1, state.armySize),
       canvasHeightPercent: CANVAS_HEIGHT_PERCENT,
     };
+  }
+
+  function readSavedArmySize(values, preferArmySizeOverStarting) {
+    const primary = preferArmySizeOverStarting ? values.armySize : values.startingArmySize;
+    const fallback = preferArmySizeOverStarting ? values.startingArmySize : values.armySize;
+    const parsed = Number.parseInt(primary ?? fallback, 10);
+    return Math.max(1, parsed || state.armySize);
   }
 
   function populatePresetSelect() {
@@ -435,11 +442,11 @@
     if (!values) return;
 
     if (state.running && !state.paused) {
-      statusEl.textContent = 'Pause the game to load in-game settings.';
+      statusEl.textContent = 'Cannot load settings while playing. Please pause the game first.';
       return;
     }
 
-    if (!state.running || !state.started) {
+    if (!state.started) {
       writeSetupValuesToInputs(values);
       saveSetupToStorage(readSetupValues());
       ENEMY_RATE_START = clampValue(Number.parseFloat(values.enemyRateStart), setupConfig.enemyRateStart);
@@ -447,7 +454,7 @@
       POWER_RATE_START = clampValue(Number.parseFloat(values.powerRateStart), setupConfig.powerRateStart);
       POWER_RATE_END = Math.min(POWER_RATE_START, clampValue(Number.parseFloat(values.powerRateEnd), setupConfig.powerRateEnd));
       TARGET_ARMY_SIZE = clampValue(Number.parseInt(values.targetArmySize, 10), setupConfig.targetArmySize);
-      state.armySize = Math.max(1, Number.parseInt(values.startingArmySize, 10) || state.armySize);
+      state.armySize = readSavedArmySize(values, false);
     } else if (state.paused) {
       ENEMY_RATE_START = values.enemyRateStart === undefined
         ? ENEMY_RATE_START
@@ -466,8 +473,7 @@
       TARGET_ARMY_SIZE = values.targetArmySize === undefined
         ? TARGET_ARMY_SIZE
         : clampValue(Number.parseInt(values.targetArmySize, 10), setupConfig.targetArmySize);
-      const armyValue = values.armySize ?? values.startingArmySize;
-      if (armyValue !== undefined) state.armySize = Math.max(1, Number.parseInt(armyValue, 10) || state.armySize);
+      state.armySize = readSavedArmySize(values, true);
     }
 
     syncLiveControlsFromCurrentState();
