@@ -17,7 +17,7 @@
   let TARGET_ARMY_SIZE = DEFAULT_TARGET_ARMY_SIZE;
   const PLAYER_BOTTOM_PADDING = 170;
   const KEYBOARD_MOVEMENT_STEP = 180;
-  const ROAD_HORIZON_Y = 90;
+  const ROAD_HORIZON_Y = 20;
   const ROAD_TOP_MIN_X = 0.34;
   const ROAD_TOP_SPAN_X = 0.32;
   const ENEMY_SIZE_SCALE = 0.75;
@@ -144,35 +144,35 @@
     },
     enemyRateStart: {
       defaultValue: DEFAULT_ENEMY_RATE_START,
-      min: 0.5,
+      min: 0.05,
       max: 3.5,
       step: 0.05,
       parse: (value) => Number.parseFloat(value)
     },
     enemyRateEnd: {
       defaultValue: DEFAULT_ENEMY_RATE_END,
-      min: 1,
+      min: 0.05,
       max: 6,
       step: 0.05,
       parse: (value) => Number.parseFloat(value)
     },
     powerRateStart: {
       defaultValue: DEFAULT_POWER_RATE_START,
-      min: 0.1,
+      min: 0.01,
       max: 1.5,
-      step: 0.05,
+      step: 0.01,
       parse: (value) => Number.parseFloat(value)
     },
     powerRateEnd: {
       defaultValue: DEFAULT_POWER_RATE_END,
-      min: 0.05,
+      min: 0.01,
       max: 1.2,
-      step: 0.05,
+      step: 0.01,
       parse: (value) => Number.parseFloat(value)
     },
     baseScroll: {
       defaultValue: DEFAULT_BASE_SCROLL,
-      min: 120,
+      min: 20,
       max: 520,
       step: 5,
       parse: (value) => Number.parseInt(value, 10)
