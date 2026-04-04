@@ -20,8 +20,8 @@
   const PLAYER_BOTTOM_PADDING = 170;
   const KEYBOARD_MOVEMENT_STEP = 180;
   const ROAD_HORIZON_Y = 20;
-  const ROAD_TOP_MIN_X = 0.34;
-  const ROAD_TOP_SPAN_X = 0.32;
+  const ROAD_TOP_MIN_X = 0.14;
+  const ROAD_TOP_SPAN_X = 0.72;
   const ENEMY_SIZE_SCALE = 0.75;
   const ENEMY_WIDTH = 108 * ENEMY_SIZE_SCALE;
   const ENEMY_HEIGHT = 69 * ENEMY_SIZE_SCALE;
@@ -47,6 +47,7 @@
   const SPAWN_JITTER_MIN = 0.82;
   const SPAWN_JITTER_MAX = 1.18;
   const VOLLEY_WIDTH_MULTIPLIER = 1.1;
+  const SMALL_ARMY_CENTER_FIRE_THRESHOLD = 6;
   const BASE_PROJECTILE_SPEED = 600;
   const PROJECTILE_SPEED_PER_LEVEL = 22;
   const PROJECTILE_OFFSCREEN_THRESHOLD = -40;
@@ -58,6 +59,8 @@
   const SPAWN_Y_OFFSET = -16;
   const ENEMY_SPEED_MIN_MULTIPLIER = 0.5;
   const ENEMY_SPEED_RANDOM_RANGE = 0.12;
+  const ENEMY_ZIGZAG_PHASE_SPEED = 2.6;
+  const ENEMY_ZIGZAG_SWAY_SPEED = 70;
   const POWER_UP_SPEED_MULTIPLIER = 0.44;
   const POWER_HITS_PER_ARMY_STEP = 18;
   const ARMY_SQUARE_MIN_RADIUS = 20;
@@ -297,9 +300,9 @@
     state.projectiles = [];
     state.fx = [];
     state.fireTimer = 1 / currentFireRatePerSecond();
-    state.enemySpawnTimer = 1 / currentEnemySpawnRate();
+    state.enemySpawnTimer = spawnIntervalFromRate(currentEnemySpawnRate());
     state.trapSpawnTimer = 1 / currentTrapSpawnRate();
-    state.powerSpawnTimer = 1 / currentPowerSpawnRate();
+    state.powerSpawnTimer = spawnIntervalFromRate(currentPowerSpawnRate());
     state.damageFlash = 0;
     state.victory = false;
     state.running = true;
@@ -473,10 +476,12 @@
 
   function fireProjectile() {
     const width = formationRangeX() * VOLLEY_WIDTH_MULTIPLIER;
-    const offset = (Math.random() - 0.5) * width;
+    const fromCenter = state.armySize < SMALL_ARMY_CENTER_FIRE_THRESHOLD;
+    const offset = fromCenter ? 0 : (Math.random() - 0.5) * width;
+    const y = fromCenter ? state.playerY : state.playerY - formationRangeY() - 20;
     state.projectiles.push({
       x: state.playerX + offset,
-      y: state.playerY - formationRangeY() - 20,
+      y,
       r: 5,
       speed: BASE_PROJECTILE_SPEED + state.level * PROJECTILE_SPEED_PER_LEVEL,
     });
@@ -650,8 +655,8 @@
           e.y = enemyHoldY;
         } else {
           if (e.pattern === 'zigzag') {
-            e.phase += dt * 4;
-            e.x += Math.sin(e.phase) * dt * 120;
+            e.phase += dt * ENEMY_ZIGZAG_PHASE_SPEED;
+            e.x += Math.sin(e.phase) * dt * ENEMY_ZIGZAG_SWAY_SPEED;
           } else if (e.pattern === 'flank') {
             const dir = state.playerX > e.x ? 1 : -1;
             e.x += dir * dt * 160;
