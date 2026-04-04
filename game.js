@@ -9,6 +9,7 @@
   const DEFAULT_POWER_RATE_START = 0.4;
   const DEFAULT_POWER_RATE_END = 0.22;
   const DEFAULT_STARTING_ARMY_SIZE = 1;
+  const DEFAULT_STARTING_ARMY_SIZE_MAX = 30;
   const DEFAULT_CANVAS_HEIGHT_PERCENT = 85;
   const DEFAULT_CANVAS_WIDTH = 1280;
   const BASE_FIRE_RATE_PER_SECOND = 1;
@@ -69,6 +70,8 @@
   const ENEMY_BREACH_TICK_SECONDS = 1;
   const ENTITY_CLEANUP_MARGIN = 120;
   const ARMY_BAR_MAX_UNITS = 180;
+  const PAUSED_ARMY_MAX = 300;
+  const POWER_SHOTS_MAX_VISUAL_SCALE = 30;
   const SUN_GLOW_RADIUS = 190;
   const MOUNTAIN_LAYER_WIDTH = 260;
   const MOUNTAIN_TILE_START_X = -320;
@@ -193,7 +196,7 @@
     startingArmySize: {
       defaultValue: DEFAULT_STARTING_ARMY_SIZE,
       min: 1,
-      max: 30,
+      max: DEFAULT_STARTING_ARMY_SIZE_MAX,
       step: 1,
       parse: (value) => Number.parseInt(value, 10)
     },
@@ -358,7 +361,7 @@
           ? 'Current number of units in your army.'
           : 'At 1 unit, the army fires exactly 1 projectile per second.';
       }
-    const armyMax = isPaused ? 300 : 30;
+    const armyMax = isPaused ? PAUSED_ARMY_MAX : DEFAULT_STARTING_ARMY_SIZE_MAX;
       if (armySizeRangeEl) armySizeRangeEl.max = String(armyMax);
       if (armySizeInputEl) armySizeInputEl.max = String(armyMax);
       setupConfig.startingArmySize.max = armyMax;
@@ -1425,7 +1428,7 @@
       } else {
         const c = '#84ffa5';
         const shotsHit = e.shotsHit || 0;
-        const progressRatio = Math.min(1, shotsHit / 30);
+        const progressRatio = Math.min(1, shotsHit / POWER_SHOTS_MAX_VISUAL_SCALE);
         const scale = POWER_PROGRESS_MIN_SCALE + progressRatio * POWER_PROGRESS_SCALE_GAIN;
         const visualR = e.r * scale;
         const pulse = POWER_PULSE_BASE
