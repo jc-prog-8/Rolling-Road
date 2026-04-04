@@ -92,6 +92,7 @@
       <header class="hud-top">
         <h1>Rolling Road</h1>
         <div id="status" aria-live="polite">Tap or drag to steer.</div>
+        <button id="pauseBtn" type="button" class="pause-btn">Pause</button>
       </header>
       <canvas id="gameCanvas" width="1280" height="720" aria-label="Rolling Road game"></canvas>
       <section class="hud-bottom">
@@ -99,6 +100,34 @@
         <div>Time: <span id="timeLabel">0:00</span></div>
         <div>Army: <span id="armyLabel">0</span></div>
         <div>Score: <span id="scoreLabel">0</span></div>
+        <div>Enemy rate: <span id="enemyRateLabel">0.00/s</span></div>
+        <div>Power rate: <span id="powerRateLabel">0.00/s</span></div>
+        <div>Fire rate: <span id="fireRateLabel">0.00/s</span></div>
+        <div>Progress: <span id="progressLabel">0%</span></div>
+      </section>
+      <section class="settings-panel">
+        <div class="settings-row settings-presets">
+          <label for="settingsPresetName">Settings name</label>
+          <input id="settingsPresetName" type="text" maxlength="40" placeholder="Preset name" />
+          <button id="saveSettingsBtn" type="button">Save</button>
+          <select id="settingsPresetSelect" aria-label="Saved settings"></select>
+          <button id="loadSettingsBtn" type="button">Load</button>
+        </div>
+        <div class="settings-row">
+          <label for="liveEnemyRateStart">Enemy start/s</label>
+          <input id="liveEnemyRateStart" type="number" min="0.05" max="3.5" step="0.05" />
+          <label for="liveEnemyRateEnd">Enemy end/s</label>
+          <input id="liveEnemyRateEnd" type="number" min="0.05" max="6" step="0.05" />
+          <label for="livePowerRateStart">Power start/s</label>
+          <input id="livePowerRateStart" type="number" min="0.01" max="1.5" step="0.01" />
+          <label for="livePowerRateEnd">Power end/s</label>
+          <input id="livePowerRateEnd" type="number" min="0.01" max="1.2" step="0.01" />
+          <label for="liveTargetArmySize">Target army</label>
+          <input id="liveTargetArmySize" type="number" min="40" max="200" step="5" />
+          <label for="liveArmySize">Army size</label>
+          <input id="liveArmySize" type="number" min="1" max="300" step="1" />
+          <button id="applyLiveSettingsBtn" type="button">Apply (paused)</button>
+        </div>
       </section>
       <section class="controls-hint">Touch/drag anywhere on the road to move the formation left/right.</section>
     </main>
