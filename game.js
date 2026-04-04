@@ -24,6 +24,7 @@
   const ROAD_TOP_MIN_X = 0.14;
   const ROAD_TOP_SPAN_X = 0.72;
   const ROAD_LANE_COUNT = 3;
+  const ALL_ROAD_LANES = Array.from({ length: ROAD_LANE_COUNT }, (_, i) => i);
   const ENEMY_SIZE_SCALE = 0.75;
   const ENEMY_WIDTH = 108 * ENEMY_SIZE_SCALE;
   const ENEMY_HEIGHT = 69 * ENEMY_SIZE_SCALE;
@@ -63,6 +64,7 @@
   const ENEMY_ZIGZAG_PHASE_SPEED = 2.6;
   const ENEMY_ZIGZAG_SWAY_SPEED = 70;
   const POWER_UP_SPEED_MULTIPLIER = 0.44;
+  const POWER_PICKUP_Y_OFFSET = 20;
   const ARMY_SQUARE_MIN_RADIUS = 20;
   const ARMY_SQUARE_SIZE_RATIO = 0.92;
   const ROAD_TOP_WIDTH_RATIO = 0.78;
@@ -299,7 +301,7 @@
     }
   }
 
-  function autoSaveStartSettings(values) {
+  function saveGameStartToAutosave(values) {
     const named = loadNamedSettingsFromStorage();
     named[AUTO_SAVE_PRESET_NAME] = {
       ...values,
@@ -543,7 +545,7 @@
   }
 
   function applySetupValues(values) {
-    autoSaveStartSettings(values);
+    saveGameStartToAutosave(values);
     RUN_DURATION_MINUTES = values.runDurationMinutes;
     LEVEL_DURATION = (RUN_DURATION_MINUTES * 60) / LEVEL_COUNT;
     BASE_SCROLL = values.baseScroll;
@@ -711,17 +713,14 @@
     return ROAD_TOP_MIN_X + Math.random() * ROAD_TOP_SPAN_X;
   }
 
-  function randomRoadLane(excludedLanes = new Set()) {
-    const openLanes = [];
-    for (let lane = 0; lane < ROAD_LANE_COUNT; lane += 1) {
-      if (!excludedLanes.has(lane)) openLanes.push(lane);
-    }
-    const lanePool = openLanes.length > 0 ? openLanes : Array.from({ length: ROAD_LANE_COUNT }, (_, i) => i);
+  function randomRoadLane(blockedLanes = new Set()) {
+    const openLanes = ALL_ROAD_LANES.filter((lane) => !blockedLanes.has(lane));
+    const lanePool = openLanes.length > 0 ? openLanes : ALL_ROAD_LANES;
     return lanePool[Math.floor(Math.random() * lanePool.length)];
   }
 
   function roadXForLane(laneNumber) {
-    if (ROAD_LANE_COUNT <= 1) return ROAD_TOP_MIN_X + ROAD_TOP_SPAN_X * 0.5;
+    if (ROAD_LANE_COUNT < 2) return ROAD_TOP_MIN_X + ROAD_TOP_SPAN_X * 0.5;
     const laneRatio = laneNumber / (ROAD_LANE_COUNT - 1);
     return ROAD_TOP_MIN_X + ROAD_TOP_SPAN_X * laneRatio;
   }
@@ -1028,8 +1027,9 @@
           return false;
         }
       } else if (e.kind === 'power') {
+        const pickupCenterY = py - POWER_PICKUP_Y_OFFSET;
         const nx = (e.x - px) / (formationW + e.r);
-        const ny = (e.y - (py - 20)) / (formationH + e.r);
+        const ny = (e.y - pickupCenterY) / (formationH + e.r);
         if (nx * nx + ny * ny <= 1) {
           applyGrowthPowerByShots(e.shotsHit || 0);
           state.fx.push({ type: 'pickup', x: e.x, y: e.y, ttl: 0.45 });
@@ -1058,6 +1058,7 @@
         const ny = (target.y - p.y) / ry;
         if (nx * nx + ny * ny > 1) return false;
         if (target.kind === 'power') {
+          // Once fully charged, shots intentionally pass through without interacting.
           if ((target.shotsHit || 0) >= POWER_SHOTS_MAX_CHARGE) return false;
           p.destroyed = true;
           target.shotsHit = Math.min(POWER_SHOTS_MAX_CHARGE, (target.shotsHit || 0) + 1);
