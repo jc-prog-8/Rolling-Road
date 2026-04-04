@@ -450,7 +450,6 @@
         syncPair(paramName, next);
       }
     }
-    syncLiveControlsFromCurrentState();
     updateSettingsUiState();
 
     // Persist on any input change so users won't lose tweaks accidentally (only at start)
