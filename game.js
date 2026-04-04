@@ -28,7 +28,7 @@
   const ENEMY_SIZE_SCALE = 0.75;
   const ENEMY_WIDTH = 108 * ENEMY_SIZE_SCALE;
   const ENEMY_HEIGHT = 69 * ENEMY_SIZE_SCALE;
-  const POWER_UP_RADIUS = 72;
+  const POWER_UP_RADIUS = 34;
   const BASE_ENEMY_HP = 2;
   const ENEMY_HP_LEVEL_THRESHOLD = 2;
   const ENEMY_HP_LEVEL_BONUS = 1;
@@ -53,10 +53,10 @@
   const BASE_PROJECTILE_SPEED = 600;
   const PROJECTILE_SPEED_PER_LEVEL = 22;
   const PROJECTILE_OFFSCREEN_THRESHOLD = -40;
-  const POWER_PROGRESS_MIN_SCALE = 0.88;
-  const POWER_PROGRESS_SCALE_GAIN = 0.22;
+  const POWER_PROGRESS_MIN_SCALE = 0.72;
+  const POWER_PROGRESS_SCALE_GAIN = 0.14;
   const POWER_PROGRESS_BAR_WIDTH_MULTIPLIER = 2.1;
-  const POWER_UP_DIAMOND_OFFSET = 3;
+  const POWER_UP_DIAMOND_OFFSET = 2;
   const POWER_UP_ICON_Y_OFFSET = 1;
   const SPAWN_Y_OFFSET = -16;
   const ENEMY_SPEED_MIN_MULTIPLIER = 0.5;
@@ -65,6 +65,10 @@
   const ENEMY_ZIGZAG_SWAY_SPEED = 70;
   const POWER_UP_SPEED_MULTIPLIER = 0.44;
   const POWER_PICKUP_Y_OFFSET = 20;
+  const ENEMY_COLLISION_WIDTH_FACTOR = 0.45;
+  const ENEMY_COLLISION_HEIGHT_FACTOR = 0.4;
+  const ENEMY_COLLISION_Y_OFFSET = 20;
+  const TRAP_COLLISION_BOUND_REDUCTION = 12;
   const ARMY_SQUARE_MIN_RADIUS = 20;
   const ARMY_SQUARE_SIZE_RATIO = 0.92;
   const ROAD_TOP_WIDTH_RATIO = 0.78;
@@ -76,6 +80,8 @@
   const PAUSED_ARMY_MAX = 300;
   const POWER_SHOTS_MAX_VISUAL_SCALE = 30;
   const POWER_SHOTS_MAX_CHARGE = 30;
+  const POWER_REWARD_CAP_START = 5;
+  const POWER_REWARD_CAP_END = POWER_SHOTS_MAX_CHARGE;
   const SUN_GLOW_RADIUS = 190;
   const MOUNTAIN_LAYER_WIDTH = 260;
   const MOUNTAIN_TILE_START_X = -320;
@@ -779,7 +785,8 @@
   }
 
   function applyGrowthPowerByShots(shotsHit) {
-    const gain = shotsHit;
+    const rewardCap = Math.round(lerp(POWER_REWARD_CAP_START, POWER_REWARD_CAP_END, overallProgressRatio()));
+    const gain = Math.min(shotsHit, rewardCap);
     if (gain > 0) {
       addUnits(gain);
       state.score += 90;
@@ -850,8 +857,8 @@
       ) return false;
 
       if (e.kind === 'enemy') {
-        const nx = (e.x - px) / (formationW + e.w * 0.5);
-        const ny = (e.y - (py - 30)) / (formationH + e.h * 0.5);
+        const nx = (e.x - px) / (formationW + e.w * ENEMY_COLLISION_WIDTH_FACTOR);
+        const ny = (e.y - (py - ENEMY_COLLISION_Y_OFFSET)) / (formationH + e.h * ENEMY_COLLISION_HEIGHT_FACTOR);
         if (nx * nx + ny * ny < 1) {
           anchorEnemyIfNeeded(e, enemyHoldY);
           if (state.totalTime >= (e.nextDamageAt || 0)) {
@@ -867,7 +874,15 @@
       } else if (e.kind === 'trap') {
         if (
           e.active
-          && overlapsCircleRect(px, py - 20, formationCollisionBound, e.x - e.w * 0.5, e.y - e.h * 0.5, e.w, e.h)
+          && overlapsCircleRect(
+            px,
+            py - POWER_PICKUP_Y_OFFSET,
+            Math.max(0, formationCollisionBound - TRAP_COLLISION_BOUND_REDUCTION),
+            e.x - e.w * 0.5,
+            e.y - e.h * 0.5,
+            e.w,
+            e.h,
+          )
         ) {
           loseUnits(2, 'Trap hit');
           return false;
@@ -888,6 +903,7 @@
 
   function updateProjectiles(dt) {
     for (const p of state.projectiles) {
+      p.prevY = p.y;
       p.y -= p.speed * dt;
     }
 
@@ -902,7 +918,13 @@
         const ry = target.kind === 'enemy' ? (target.h * 0.5 + p.r) : (target.r + p.r);
         const nx = (target.x - p.x) / rx;
         const ny = (target.y - p.y) / ry;
-        if (nx * nx + ny * ny > 1) return false;
+        const prevY = Number.isFinite(p.prevY) ? p.prevY : p.y;
+        const prevNy = (target.y - prevY) / ry;
+        const minY = Math.min(p.y, prevY);
+        const maxY = Math.max(p.y, prevY);
+        const crossesTargetY = target.y >= minY && target.y <= maxY;
+        const sweptHit = crossesTargetY && nx * nx <= 1;
+        if (nx * nx + ny * ny > 1 && nx * nx + prevNy * prevNy > 1 && !sweptHit) return false;
         if (target.kind === 'power') {
           // Once fully charged, shots intentionally pass through without interacting.
           if ((target.shotsHit || 0) >= POWER_SHOTS_MAX_CHARGE) return false;
@@ -932,6 +954,7 @@
 
       for (const e of state.entities) {
         if (e.kind !== 'enemy' && e.kind !== 'power') continue;
+        if (e.kind === 'enemy' && e.anchored) continue;
         if (resolveProjectileHit(e)) break;
       }
     }
