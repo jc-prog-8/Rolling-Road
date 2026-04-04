@@ -914,9 +914,10 @@
         const ry = target.kind === 'enemy' ? (target.h * 0.5 + p.r) : (target.r + p.r);
         const nx = (target.x - p.x) / rx;
         const ny = (target.y - p.y) / ry;
-        const prevNy = (target.y - (Number.isFinite(p.prevY) ? p.prevY : p.y)) / ry;
-        const minY = Math.min(p.y, Number.isFinite(p.prevY) ? p.prevY : p.y);
-        const maxY = Math.max(p.y, Number.isFinite(p.prevY) ? p.prevY : p.y);
+        const prevY = Number.isFinite(p.prevY) ? p.prevY : p.y;
+        const prevNy = (target.y - prevY) / ry;
+        const minY = Math.min(p.y, prevY);
+        const maxY = Math.max(p.y, prevY);
         const crossesTargetY = target.y >= minY && target.y <= maxY;
         const sweptHit = crossesTargetY && nx * nx <= 1;
         if (nx * nx + ny * ny > 1 && nx * nx + prevNy * prevNy > 1 && !sweptHit) return false;
