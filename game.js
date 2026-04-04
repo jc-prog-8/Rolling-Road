@@ -1,13 +1,13 @@
 (() => {
-  const LEVEL_COUNT = 5;
-  const DEFAULT_RUN_DURATION_MINUTES = 5;
+  const LEVEL_COUNT = 1;
+  const DEFAULT_RUN_DURATION_MINUTES = 10;
   const DEFAULT_LEVEL_DURATION = (DEFAULT_RUN_DURATION_MINUTES * 60) / LEVEL_COUNT;
-  const DEFAULT_BASE_SCROLL = 260;
-  const DEFAULT_TARGET_ARMY_SIZE = 100;
-  const DEFAULT_ENEMY_RATE_START = 1;
-  const DEFAULT_ENEMY_RATE_END = 3;
-  const DEFAULT_POWER_RATE_START = 0.4;
-  const DEFAULT_POWER_RATE_END = 0.22;
+  const DEFAULT_BASE_SCROLL = 85;
+  const DEFAULT_TARGET_ARMY_SIZE = 200;
+  const DEFAULT_ENEMY_RATE_START = 0.35;
+  const DEFAULT_ENEMY_RATE_END = 1.75;
+  const DEFAULT_POWER_RATE_START = 0.05;
+  const DEFAULT_POWER_RATE_END = 0.2;
   const DEFAULT_STARTING_ARMY_SIZE = 1;
   const DEFAULT_STARTING_ARMY_SIZE_MAX = 30;
   const DEFAULT_CANVAS_HEIGHT_PERCENT = 85;
@@ -121,6 +121,7 @@
   const pauseBtnEl = document.getElementById('pauseBtn');
   const applyChangesBtnEl = document.getElementById('applyChangesBtn');
   const startGameBtnEl = document.getElementById('startGameBtn');
+  const resetDefaultsBtnEl = document.getElementById('resetDefaultsBtn');
 
   const state = {
     running: false,
@@ -323,7 +324,7 @@
     if (introEl) {
       introEl.textContent = isPaused
         ? 'Greyed fields cannot change mid-run. Resume when done.'
-        : 'Tune the run pacing, then start the game.';
+        : 'Tune the endless run pacing, then start the game.';
     }
 
     // Start-only fields: grey out when paused (cannot change mid-game)
@@ -360,6 +361,7 @@
     // Show Start Game button only when not paused; show Apply Changes when paused
     if (startGameBtnEl) startGameBtnEl.style.display = isPaused ? 'none' : '';
     if (applyChangesBtnEl) applyChangesBtnEl.style.display = isPaused ? '' : 'none';
+    if (resetDefaultsBtnEl) resetDefaultsBtnEl.style.display = isPaused ? 'none' : '';
   }
 
   function syncLiveControlsFromCurrentState() {
@@ -397,6 +399,23 @@
       syncPair(paramName, values[paramName]);
     }
     return values;
+  }
+
+  function getDefaultSetupValues() {
+    const values = {};
+    for (const [paramName, cfg] of Object.entries(setupConfig)) {
+      values[paramName] = cfg.defaultValue;
+    }
+    return values;
+  }
+
+  function resetSetupToDefaults() {
+    const defaults = getDefaultSetupValues();
+    for (const [paramName, value] of Object.entries(defaults)) {
+      syncPair(paramName, value);
+    }
+    saveSetupToStorage(defaults);
+    statusEl.textContent = 'Defaults restored.';
   }
 
   function applySetupValues(values) {
@@ -466,6 +485,7 @@
       saveSetupToStorage(setupValues);
     });
     applyChangesBtnEl?.addEventListener('click', applyPausedLiveSettings);
+    resetDefaultsBtnEl?.addEventListener('click', resetSetupToDefaults);
   }
 
   function resizeCanvas(canvasHeightPercent) {
@@ -699,7 +719,7 @@
   }
 
   function updateLevelProgression() {
-    if (state.timeInLevel >= LEVEL_DURATION) nextLevel();
+    // Endless mode: no level transitions or playfield resets.
   }
 
   function spawnFromRates(dt) {
@@ -1440,7 +1460,7 @@
   }
 
   function updateHud() {
-    levelEl.textContent = `${Math.min(state.level + 1, LEVEL_COUNT)}/${LEVEL_COUNT}`;
+    levelEl.textContent = 'Endless';
     const mins = Math.floor(state.timeInLevel / 60);
     const secs = Math.floor(state.timeInLevel % 60).toString().padStart(2, '0');
     timeEl.textContent = `${mins}:${secs}`;

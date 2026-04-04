@@ -11,62 +11,62 @@
       <section id="setupScreen" class="setup-screen" aria-labelledby="setupTitle">
         <div class="setup-card">
           <h2 id="setupTitle">Game Setup</h2>
-          <p class="setup-intro">Tune the run pacing, then start the game.</p>
+          <p class="setup-intro">Tune the endless run pacing, then start the game.</p>
           <form id="setupForm" class="setup-form">
             <div class="setup-field" data-param="runDurationMinutes">
               <label for="runDurationMinutesRange">Run duration (minutes)</label>
-              <p class="setup-description">Total run time across all 5 stages.</p>
+              <p class="setup-description">Controls pacing over the endless run (spawn-rate progression ramps over this duration).</p>
               <div class="setup-inputs">
-                <input id="runDurationMinutesRange" type="range" min="3" max="10" step="0.5" value="5" />
-                <input id="runDurationMinutesInput" type="number" min="3" max="10" step="0.5" value="5" inputmode="decimal" />
+                <input id="runDurationMinutesRange" type="range" min="3" max="10" step="0.5" value="10" />
+                <input id="runDurationMinutesInput" type="number" min="3" max="10" step="0.5" value="10" inputmode="decimal" />
               </div>
             </div>
             <div class="setup-field" data-param="targetArmySize">
               <label for="targetArmySizeRange">Army size for maximum fire rate</label>
               <p class="setup-description">Fire rate scales up as your army grows, reaching its peak at this size.</p>
               <div class="setup-inputs">
-                <input id="targetArmySizeRange" type="range" min="40" max="200" step="5" value="100" />
-                <input id="targetArmySizeInput" type="number" min="40" max="200" step="5" value="100" inputmode="numeric" />
+                <input id="targetArmySizeRange" type="range" min="40" max="200" step="5" value="200" />
+                <input id="targetArmySizeInput" type="number" min="40" max="200" step="5" value="200" inputmode="numeric" />
               </div>
             </div>
             <div class="setup-field" data-param="baseScroll">
               <label for="baseScrollRange">Base scroll speed</label>
               <p class="setup-description">Controls the base world scroll speed (higher = faster).</p>
               <div class="setup-inputs">
-                <input id="baseScrollRange" type="range" min="20" max="520" step="5" value="260" />
-                <input id="baseScrollInput" type="number" min="20" max="520" step="5" value="260" inputmode="numeric" />
+                <input id="baseScrollRange" type="range" min="20" max="520" step="5" value="85" />
+                <input id="baseScrollInput" type="number" min="20" max="520" step="5" value="85" inputmode="numeric" />
               </div>
             </div>
             <div class="setup-field" data-param="enemyRateStart">
               <label for="enemyRateStartRange">Enemy spawn rate at start (per second)</label>
               <p class="setup-description">How many enemies appear each second at the beginning.</p>
               <div class="setup-inputs">
-                <input id="enemyRateStartRange" type="range" min="0.05" max="3.5" step="0.05" value="1" />
-                <input id="enemyRateStartInput" type="number" min="0.05" max="3.5" step="0.05" value="1" inputmode="decimal" />
+                <input id="enemyRateStartRange" type="range" min="0.05" max="3.5" step="0.05" value="0.35" />
+                <input id="enemyRateStartInput" type="number" min="0.05" max="3.5" step="0.05" value="0.35" inputmode="decimal" />
               </div>
             </div>
             <div class="setup-field" data-param="enemyRateEnd">
               <label for="enemyRateEndRange">Enemy spawn rate at end (per second)</label>
               <p class="setup-description">How many enemies appear each second near run completion (clamped on Start Game to be at least the start rate).</p>
               <div class="setup-inputs">
-                <input id="enemyRateEndRange" type="range" min="0.05" max="6" step="0.05" value="3" />
-                <input id="enemyRateEndInput" type="number" min="0.05" max="6" step="0.05" value="3" inputmode="decimal" />
+                <input id="enemyRateEndRange" type="range" min="0.05" max="6" step="0.05" value="1.75" />
+                <input id="enemyRateEndInput" type="number" min="0.05" max="6" step="0.05" value="1.75" inputmode="decimal" />
               </div>
             </div>
             <div class="setup-field" data-param="powerRateStart">
               <label for="powerRateStartRange">Power-up spawn rate at start (per second)</label>
               <p class="setup-description">Growth-pickup appearance rate early in the run.</p>
               <div class="setup-inputs">
-                <input id="powerRateStartRange" type="range" min="0.01" max="1.5" step="0.01" value="0.4" />
-                <input id="powerRateStartInput" type="number" min="0.01" max="1.5" step="0.01" value="0.4" inputmode="decimal" />
+                <input id="powerRateStartRange" type="range" min="0.01" max="1.5" step="0.01" value="0.05" />
+                <input id="powerRateStartInput" type="number" min="0.01" max="1.5" step="0.01" value="0.05" inputmode="decimal" />
               </div>
             </div>
             <div class="setup-field" data-param="powerRateEnd">
               <label for="powerRateEndRange">Power-up spawn rate at end (per second)</label>
               <p class="setup-description">Growth-pickup appearance rate near run completion (clamped on Start Game to be no higher than the start rate).</p>
               <div class="setup-inputs">
-                <input id="powerRateEndRange" type="range" min="0.01" max="1.2" step="0.01" value="0.22" />
-                <input id="powerRateEndInput" type="number" min="0.01" max="1.2" step="0.01" value="0.22" inputmode="decimal" />
+                <input id="powerRateEndRange" type="range" min="0.01" max="1.2" step="0.01" value="0.2" />
+                <input id="powerRateEndInput" type="number" min="0.01" max="1.2" step="0.01" value="0.2" inputmode="decimal" />
               </div>
             </div>
             <div class="setup-field" data-param="startingArmySize">
@@ -87,6 +87,7 @@
             </div>
             <div class="setup-actions">
               <button id="applyChangesBtn" type="button" class="setup-start-btn">Apply Changes</button>
+              <button id="resetDefaultsBtn" type="button" class="setup-start-btn">Reset to defaults</button>
               <button id="startGameBtn" type="submit" class="setup-start-btn">Start Game</button>
             </div>
           </form>
@@ -99,7 +100,7 @@
       </header>
       <canvas id="gameCanvas" width="1280" height="720" aria-label="Rolling Road game"></canvas>
       <section class="hud-bottom">
-        <div>Level: <span id="levelLabel">1/5</span></div>
+        <div>Level: <span id="levelLabel">Endless</span></div>
         <div>Time: <span id="timeLabel">0:00</span></div>
         <div>Army: <span id="armyLabel">0</span></div>
         <div>Score: <span id="scoreLabel">0</span></div>

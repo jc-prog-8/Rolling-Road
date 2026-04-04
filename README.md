@@ -21,8 +21,8 @@ This repository is static-site ready. Ensure GitHub Pages is configured to serve
 
 ## Game summary
 
-- 5 handcrafted prototype levels
-- Each level targets ~4 minutes of run time
+- Endless run mode (no level resets)
+- Difficulty ramps over your configured run-duration pacing window
 - Lateral army steering with automatic forward world scrolling
 - Enemies (straight/zig-zag/flank), traps (static/timed), and power-ups
 - Army growth power-ups and widening army/projectile formations as army size increases
@@ -31,9 +31,9 @@ This repository is static-site ready. Ensure GitHub Pages is configured to serve
 
 ## Stretch-goal test approach
 
-Perform full end-to-end play testing by running the game in a browser and completing all 5 levels while verifying:
+Perform full end-to-end play testing by running the game in a browser and verifying:
 
 1. Enemy/trap collisions and unit-loss feedback
 2. Army-growth power-up behavior and wider firing spread as army size increases
-3. Progressive difficulty and level transitions
+3. Progressive difficulty over time without playfield resets
 4. Stable touch steering on iPhone/iPad Safari
