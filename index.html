@@ -11,9 +11,16 @@
       <section id="setupScreen" class="setup-screen" aria-labelledby="setupTitle">
         <div class="setup-card">
           <h2 id="setupTitle">Game Setup</h2>
-          <p class="setup-intro">Tune the run pacing, then start the game.</p>
+          <p class="setup-intro" id="setupIntro">Tune the run pacing, then start the game.</p>
+          <div class="setup-presets">
+            <label for="settingsPresetName">Settings name</label>
+            <input id="settingsPresetName" type="text" maxlength="40" placeholder="Preset name" />
+            <button id="saveSettingsBtn" type="button">Save</button>
+            <select id="settingsPresetSelect" aria-label="Saved settings"></select>
+            <button id="loadSettingsBtn" type="button">Load</button>
+          </div>
           <form id="setupForm" class="setup-form">
-            <div class="setup-field" data-param="runDurationMinutes">
+            <div class="setup-field" data-param="runDurationMinutes" data-start-only="true">
               <label for="runDurationMinutesRange">Run duration (minutes)</label>
               <p class="setup-description">Total run time across all 5 stages.</p>
               <div class="setup-inputs">
@@ -29,7 +36,7 @@
                 <input id="targetArmySizeInput" type="number" min="40" max="200" step="5" value="100" inputmode="numeric" />
               </div>
             </div>
-            <div class="setup-field" data-param="baseScroll">
+            <div class="setup-field" data-param="baseScroll" data-start-only="true">
               <label for="baseScrollRange">Base scroll speed</label>
               <p class="setup-description">Controls the base world scroll speed (higher = faster).</p>
               <div class="setup-inputs">
@@ -69,7 +76,7 @@
                 <input id="powerRateEndInput" type="number" min="0.01" max="1.2" step="0.01" value="0.22" inputmode="decimal" />
               </div>
             </div>
-            <div class="setup-field" data-param="startingArmySize">
+            <div class="setup-field" data-param="startingArmySize" data-start-only="true">
               <label for="startingArmySizeRange">Starting army size</label>
               <p class="setup-description">At 1 unit, the army fires exactly 1 projectile per second.</p>
               <div class="setup-inputs">
@@ -77,12 +84,20 @@
                 <input id="startingArmySizeInput" type="number" min="1" max="30" step="1" value="1" inputmode="numeric" />
               </div>
             </div>
-            <div class="setup-field" data-param="canvasHeightPercent">
+            <div class="setup-field" data-param="canvasHeightPercent" data-start-only="true">
               <label for="canvasHeightPercentRange">Game height (% of screen)</label>
               <p class="setup-description">How much of the screen height the game canvas fills. Increase on mobile for a taller play area.</p>
               <div class="setup-inputs">
                 <input id="canvasHeightPercentRange" type="range" min="40" max="95" step="5" value="85" />
                 <input id="canvasHeightPercentInput" type="number" min="40" max="95" step="5" value="85" inputmode="numeric" />
+              </div>
+            </div>
+            <div class="setup-field" data-param="armySize" data-in-game-only="true">
+              <label for="armySizeRange">Current army size</label>
+              <p class="setup-description">Directly adjust the number of units currently in play. Only available when paused.</p>
+              <div class="setup-inputs">
+                <input id="armySizeRange" type="range" min="1" max="300" step="1" value="1" />
+                <input id="armySizeInput" type="number" min="1" max="300" step="1" value="1" inputmode="numeric" />
               </div>
             </div>
             <button id="startGameBtn" type="submit" class="setup-start-btn">Start Game</button>
@@ -104,30 +119,6 @@
         <div>Power rate: <span id="powerRateLabel">0.00/s</span></div>
         <div>Fire rate: <span id="fireRateLabel">0.00/s</span></div>
         <div>Progress: <span id="progressLabel">0%</span></div>
-      </section>
-      <section class="settings-panel">
-        <div class="settings-row settings-presets">
-          <label for="settingsPresetName">Settings name</label>
-          <input id="settingsPresetName" type="text" maxlength="40" placeholder="Preset name" />
-          <button id="saveSettingsBtn" type="button">Save</button>
-          <select id="settingsPresetSelect" aria-label="Saved settings"></select>
-          <button id="loadSettingsBtn" type="button">Load</button>
-        </div>
-        <div class="settings-row">
-          <label for="liveEnemyRateStart">Enemy start/s</label>
-          <input id="liveEnemyRateStart" type="number" min="0.05" max="3.5" step="0.05" />
-          <label for="liveEnemyRateEnd">Enemy end/s</label>
-          <input id="liveEnemyRateEnd" type="number" min="0.05" max="6" step="0.05" />
-          <label for="livePowerRateStart">Power start/s</label>
-          <input id="livePowerRateStart" type="number" min="0.01" max="1.5" step="0.01" />
-          <label for="livePowerRateEnd">Power end/s</label>
-          <input id="livePowerRateEnd" type="number" min="0.01" max="1.2" step="0.01" />
-          <label for="liveTargetArmySize">Target army</label>
-          <input id="liveTargetArmySize" type="number" min="40" max="200" step="5" />
-          <label for="liveArmySize">Army size</label>
-          <input id="liveArmySize" type="number" min="1" max="300" step="1" />
-          <button id="applyLiveSettingsBtn" type="button">Apply (paused)</button>
-        </div>
       </section>
       <section class="controls-hint">Touch/drag anywhere on the road to move the formation left/right.</section>
     </main>

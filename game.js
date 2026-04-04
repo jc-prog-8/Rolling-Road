@@ -111,18 +111,13 @@
   const progressEl = document.getElementById('progressLabel');
   const setupScreenEl = document.getElementById('setupScreen');
   const setupFormEl = document.getElementById('setupForm');
+  const setupTitleEl = document.getElementById('setupTitle');
+  const setupIntroEl = document.getElementById('setupIntro');
   const pauseBtnEl = document.getElementById('pauseBtn');
   const saveSettingsBtnEl = document.getElementById('saveSettingsBtn');
   const loadSettingsBtnEl = document.getElementById('loadSettingsBtn');
   const settingsPresetNameEl = document.getElementById('settingsPresetName');
   const settingsPresetSelectEl = document.getElementById('settingsPresetSelect');
-  const applyLiveSettingsBtnEl = document.getElementById('applyLiveSettingsBtn');
-  const liveEnemyRateStartEl = document.getElementById('liveEnemyRateStart');
-  const liveEnemyRateEndEl = document.getElementById('liveEnemyRateEnd');
-  const livePowerRateStartEl = document.getElementById('livePowerRateStart');
-  const livePowerRateEndEl = document.getElementById('livePowerRateEnd');
-  const liveTargetArmySizeEl = document.getElementById('liveTargetArmySize');
-  const liveArmySizeEl = document.getElementById('liveArmySize');
 
   const state = {
     running: false,
@@ -214,8 +209,18 @@
       max: 95,
       step: 5,
       parse: (value) => Number.parseInt(value, 10)
+    },
+    armySize: {
+      defaultValue: DEFAULT_STARTING_ARMY_SIZE,
+      min: 1,
+      max: 300,
+      step: 1,
+      parse: (value) => Number.parseInt(value, 10)
     }
   };
+
+  const START_ONLY_PARAMS = new Set(['runDurationMinutes', 'baseScroll', 'startingArmySize', 'canvasHeightPercent']);
+  const IN_GAME_ONLY_PARAMS = new Set(['armySize']);
 
   function clampValue(value, cfg) {
     const numeric = Number.isFinite(value) ? value : cfg.defaultValue;
@@ -306,24 +311,23 @@
 
   function readLiveSettingValues() {
     const values = {
-      enemyRateStart: clampValue(Number.parseFloat(liveEnemyRateStartEl?.value), setupConfig.enemyRateStart),
-      enemyRateEnd: clampValue(Number.parseFloat(liveEnemyRateEndEl?.value), setupConfig.enemyRateEnd),
-      powerRateStart: clampValue(Number.parseFloat(livePowerRateStartEl?.value), setupConfig.powerRateStart),
-      powerRateEnd: clampValue(Number.parseFloat(livePowerRateEndEl?.value), setupConfig.powerRateEnd),
-      targetArmySize: clampValue(Number.parseInt(liveTargetArmySizeEl?.value, 10), setupConfig.targetArmySize),
-      armySize: Math.max(1, Number.parseInt(liveArmySizeEl?.value, 10) || state.armySize),
+      enemyRateStart: clampValue(Number.parseFloat(document.getElementById('enemyRateStartInput')?.value), setupConfig.enemyRateStart),
+      enemyRateEnd: clampValue(Number.parseFloat(document.getElementById('enemyRateEndInput')?.value), setupConfig.enemyRateEnd),
+      powerRateStart: clampValue(Number.parseFloat(document.getElementById('powerRateStartInput')?.value), setupConfig.powerRateStart),
+      powerRateEnd: clampValue(Number.parseFloat(document.getElementById('powerRateEndInput')?.value), setupConfig.powerRateEnd),
+      targetArmySize: clampValue(Number.parseInt(document.getElementById('targetArmySizeInput')?.value, 10), setupConfig.targetArmySize),
+      armySize: Math.max(1, Number.parseInt(document.getElementById('armySizeInput')?.value, 10) || state.armySize),
     };
     return values;
   }
 
   function syncLiveControlsFromCurrentState() {
-    if (!liveEnemyRateStartEl) return;
-    liveEnemyRateStartEl.value = `${ENEMY_RATE_START}`;
-    liveEnemyRateEndEl.value = `${ENEMY_RATE_END}`;
-    livePowerRateStartEl.value = `${POWER_RATE_START}`;
-    livePowerRateEndEl.value = `${POWER_RATE_END}`;
-    liveTargetArmySizeEl.value = `${TARGET_ARMY_SIZE}`;
-    liveArmySizeEl.value = `${Math.max(1, state.armySize)}`;
+    syncPair('enemyRateStart', ENEMY_RATE_START);
+    syncPair('enemyRateEnd', ENEMY_RATE_END);
+    syncPair('powerRateStart', POWER_RATE_START);
+    syncPair('powerRateEnd', POWER_RATE_END);
+    syncPair('targetArmySize', TARGET_ARMY_SIZE);
+    syncPair('armySize', Math.max(1, state.armySize));
   }
 
   function writeSetupValuesToInputs(values) {
@@ -336,8 +340,7 @@
   }
 
   function readCurrentSettingsSnapshot() {
-    const showingSetup = !!setupScreenEl && !setupScreenEl.classList.contains('hidden');
-    if (!state.started || showingSetup) {
+    if (!state.started) {
       return readSetupValues();
     }
     return {
@@ -349,6 +352,7 @@
       powerRateEnd: POWER_RATE_END,
       baseScroll: BASE_SCROLL,
       startingArmySize: Math.max(1, state.armySize),
+      armySize: Math.max(1, state.armySize),
       canvasHeightPercent: CANVAS_HEIGHT_PERCENT,
     };
   }
@@ -396,17 +400,18 @@
     POWER_RATE_START = clampValue(Number.parseFloat(values.powerRateStart), setupConfig.powerRateStart);
     POWER_RATE_END = Math.min(POWER_RATE_START, clampValue(Number.parseFloat(values.powerRateEnd), setupConfig.powerRateEnd));
     TARGET_ARMY_SIZE = clampValue(Number.parseInt(values.targetArmySize, 10), setupConfig.targetArmySize);
-    state.armySize = Math.max(1, Number.parseInt(values.startingArmySize, 10) || state.armySize);
+    if (state.started) {
+      const savedArmySize = values.armySize !== undefined ? values.armySize : values.startingArmySize;
+      state.armySize = Math.max(1, Number.parseInt(savedArmySize, 10) || state.armySize);
+    } else {
+      state.armySize = Math.max(1, Number.parseInt(values.startingArmySize, 10) || state.armySize);
+    }
     syncLiveControlsFromCurrentState();
     updateHud();
     statusEl.textContent = `Loaded settings "${name}".`;
   }
 
   function applyPausedLiveSettings() {
-    if (!state.paused) {
-      statusEl.textContent = 'Pause the game to apply live difficulty and army changes.';
-      return;
-    }
     const values = readLiveSettingValues();
     ENEMY_RATE_START = values.enemyRateStart;
     ENEMY_RATE_END = Math.max(values.enemyRateStart, values.enemyRateEnd);
@@ -416,7 +421,34 @@
     state.armySize = values.armySize;
     syncLiveControlsFromCurrentState();
     updateHud();
-    statusEl.textContent = 'Paused settings applied.';
+  }
+
+  function updateSetupFieldStates() {
+    if (!setupFormEl) return;
+    const inGame = state.started;
+    const startBtn = document.getElementById('startGameBtn');
+    for (const paramName of Object.keys(setupConfig)) {
+      const fieldEl = setupFormEl.querySelector(`.setup-field[data-param="${paramName}"]`);
+      if (!fieldEl) continue;
+      const isStartOnly = START_ONLY_PARAMS.has(paramName);
+      const isInGameOnly = IN_GAME_ONLY_PARAMS.has(paramName);
+      const isDisabled = inGame ? isStartOnly : isInGameOnly;
+      fieldEl.classList.toggle('field-disabled', isDisabled);
+      for (const input of fieldEl.querySelectorAll('input')) {
+        input.disabled = isDisabled;
+      }
+    }
+    if (startBtn) {
+      startBtn.textContent = inGame ? 'Apply & Resume' : 'Start Game';
+    }
+    if (setupTitleEl) {
+      setupTitleEl.textContent = inGame ? 'Paused – Settings' : 'Game Setup';
+    }
+    if (setupIntroEl) {
+      setupIntroEl.textContent = inGame
+        ? 'Adjust in-game settings, then resume. Greyed-out fields can only be changed before starting.'
+        : 'Tune the run pacing, then start the game. Greyed-out fields can only be changed in-game when paused.';
+    }
   }
 
   function readSetupValues() {
@@ -480,7 +512,7 @@
       }
     }
     populatePresetSelect();
-    syncLiveControlsFromCurrentState();
+    updateSetupFieldStates();
 
     // Persist on any input change so users won't lose tweaks accidentally
     setupFormEl.addEventListener('input', () => {
@@ -489,14 +521,21 @@
     });
     setupFormEl.addEventListener('submit', (event) => {
       event.preventDefault();
-      const setupValues = readSetupValues();
-      applySetupValues(setupValues);
-      saveSetupToStorage(setupValues);
-      if (setupScreenEl) setupScreenEl.classList.add('hidden');
+      if (state.started && state.paused) {
+        applyPausedLiveSettings();
+        state.paused = false;
+        if (pauseBtnEl) pauseBtnEl.textContent = 'Pause';
+        if (setupScreenEl) setupScreenEl.classList.add('hidden');
+        statusEl.textContent = 'Settings applied. Resumed.';
+      } else {
+        const setupValues = readSetupValues();
+        applySetupValues(setupValues);
+        saveSetupToStorage(setupValues);
+        if (setupScreenEl) setupScreenEl.classList.add('hidden');
+      }
     });
     saveSettingsBtnEl?.addEventListener('click', saveNamedSettings);
     loadSettingsBtnEl?.addEventListener('click', loadNamedSettings);
-    applyLiveSettingsBtnEl?.addEventListener('click', applyPausedLiveSettings);
   }
 
   function resizeCanvas(canvasHeightPercent) {
@@ -765,8 +804,11 @@
     if (pauseBtnEl) pauseBtnEl.textContent = state.paused ? 'Resume' : 'Pause';
     if (state.paused) {
       syncLiveControlsFromCurrentState();
+      updateSetupFieldStates();
+      if (setupScreenEl) setupScreenEl.classList.remove('hidden');
       statusEl.textContent = 'Paused. Adjust settings, then resume.';
     } else {
+      if (setupScreenEl) setupScreenEl.classList.add('hidden');
       statusEl.textContent = 'Resumed.';
     }
   }
