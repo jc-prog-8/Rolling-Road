@@ -65,6 +65,10 @@
   const ENEMY_ZIGZAG_SWAY_SPEED = 70;
   const POWER_UP_SPEED_MULTIPLIER = 0.44;
   const POWER_PICKUP_Y_OFFSET = 20;
+  const ENEMY_COLLISION_WIDTH_FACTOR = 0.45;
+  const ENEMY_COLLISION_HEIGHT_FACTOR = 0.4;
+  const ENEMY_COLLISION_Y_OFFSET = 20;
+  const TRAP_COLLISION_BOUND_REDUCTION = 12;
   const ARMY_SQUARE_MIN_RADIUS = 20;
   const ARMY_SQUARE_SIZE_RATIO = 0.92;
   const ROAD_TOP_WIDTH_RATIO = 0.78;
@@ -853,8 +857,8 @@
       ) return false;
 
       if (e.kind === 'enemy') {
-        const nx = (e.x - px) / (formationW + e.w * 0.45);
-        const ny = (e.y - (py - 20)) / (formationH + e.h * 0.4);
+        const nx = (e.x - px) / (formationW + e.w * ENEMY_COLLISION_WIDTH_FACTOR);
+        const ny = (e.y - (py - ENEMY_COLLISION_Y_OFFSET)) / (formationH + e.h * ENEMY_COLLISION_HEIGHT_FACTOR);
         if (nx * nx + ny * ny < 1) {
           anchorEnemyIfNeeded(e, enemyHoldY);
           if (state.totalTime >= (e.nextDamageAt || 0)) {
@@ -873,7 +877,7 @@
           && overlapsCircleRect(
             px,
             py - POWER_PICKUP_Y_OFFSET,
-            Math.max(0, formationCollisionBound - 12),
+            Math.max(0, formationCollisionBound - TRAP_COLLISION_BOUND_REDUCTION),
             e.x - e.w * 0.5,
             e.y - e.h * 0.5,
             e.w,
