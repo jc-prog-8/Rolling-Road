@@ -74,6 +74,8 @@
   const ROAD_BOTTOM_WIDTH_RATIO = 1;
   const ENEMY_HOLD_LINE_OFFSET = 64;
   const ENEMY_BREACH_TICK_SECONDS = 1;
+  const ENEMY_TRACKING_THRESHOLD_RATIO = 0.3;
+  const ENEMY_PLAYER_FOLLOW_LAG_SECONDS = 0.5;
   const ENTITY_CLEANUP_MARGIN = 120;
   const ARMY_BAR_MAX_UNITS = 180;
   const PAUSED_ARMY_MAX = 300;
@@ -824,14 +826,21 @@
     if (!enemy.anchored) anchorEnemy(enemy, holdY);
   }
 
+  function followPlayerX(enemy, followAlpha) {
+    enemy.x += (state.playerX - enemy.x) * followAlpha;
+  }
+
   function updateEntities(dt) {
     const enemyHoldY = state.playerY - ENEMY_HOLD_LINE_OFFSET;
-    const enemyTrackingThresholdY = ROAD_HORIZON_Y + (enemyHoldY - ROAD_HORIZON_Y) * 0.5;
+    const enemyTrackingThresholdY = ROAD_HORIZON_Y + (enemyHoldY - ROAD_HORIZON_Y) * ENEMY_TRACKING_THRESHOLD_RATIO;
+    const enemyFollowAlpha = ENEMY_PLAYER_FOLLOW_LAG_SECONDS > 0
+      ? (1 - Math.exp(-dt / ENEMY_PLAYER_FOLLOW_LAG_SECONDS))
+      : 1;
 
     for (const e of state.entities) {
       if (e.kind === 'enemy') {
         if (e.anchored) {
-          e.x = state.playerX;
+          followPlayerX(e, enemyFollowAlpha);
           e.y = enemyHoldY;
         } else {
           if (e.pattern === 'zigzag') {
@@ -845,7 +854,7 @@
           if (!e.trackingPlayer && e.y >= enemyTrackingThresholdY) {
             e.trackingPlayer = true;
           }
-          if (e.trackingPlayer) e.x = state.playerX;
+          if (e.trackingPlayer) followPlayerX(e, enemyFollowAlpha);
           if (e.y >= enemyHoldY) {
             anchorEnemyIfNeeded(e, enemyHoldY);
           }
