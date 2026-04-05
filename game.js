@@ -119,10 +119,15 @@
   const progressEl = document.getElementById('progressLabel');
   const setupScreenEl = document.getElementById('setupScreen');
   const setupFormEl = document.getElementById('setupForm');
+  const buildTimestampEl = document.getElementById('buildTimestamp');
   const pauseBtnEl = document.getElementById('pauseBtn');
   const applyChangesBtnEl = document.getElementById('applyChangesBtn');
   const startGameBtnEl = document.getElementById('startGameBtn');
   const resetDefaultsBtnEl = document.getElementById('resetDefaultsBtn');
+
+  if (buildTimestampEl) {
+    buildTimestampEl.textContent = 'Build made: 2026-04-05T14:09:48.041Z';
+  }
 
   const state = {
     running: false,
