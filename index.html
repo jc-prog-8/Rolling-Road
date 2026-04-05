@@ -86,6 +86,16 @@
                 <input id="canvasHeightPercentInput" type="number" min="40" max="95" step="5" value="85" inputmode="numeric" />
               </div>
             </div>
+            <div class="setup-field level-editor-field">
+              <label for="levelScriptEditor">Level editor (auto-saved locally)</label>
+              <p class="setup-description">Edit structured level JSON script. Changes auto-save to localStorage and can be exported for Copilot.</p>
+              <textarea id="levelScriptEditor" class="level-script-editor" spellcheck="false"></textarea>
+              <div class="level-editor-actions">
+                <button id="resetLevelScriptBtn" type="button" class="setup-start-btn">Reset Script</button>
+                <button id="exportLevelScriptBtn" type="button" class="setup-start-btn">Export Script</button>
+              </div>
+              <p id="levelEditorStatus" class="level-editor-status" aria-live="polite"></p>
+            </div>
             <div class="setup-actions">
               <button id="applyChangesBtn" type="button" class="setup-start-btn">Apply Changes</button>
               <button id="resetDefaultsBtn" type="button" class="setup-start-btn">Reset to defaults</button>

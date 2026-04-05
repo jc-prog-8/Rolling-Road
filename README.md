@@ -21,8 +21,9 @@ This repository is static-site ready. Ensure GitHub Pages is configured to serve
 
 ## Game summary
 
-- Endless run mode (no level resets)
-- Difficulty ramps over your configured run-duration pacing window
+- Structured scripted levels with explicit start/finish sections
+- Level 1 includes guided monster + power-up beats, followed by additional scripted encounters
+- In-setup level editor with localStorage autosave and JSON export
 - Lateral army steering with automatic forward world scrolling
 - Enemies (straight/zig-zag/flank), traps (static/timed), and power-ups
 - Army growth power-ups and widening army/projectile formations as army size increases
@@ -35,5 +36,5 @@ Perform full end-to-end play testing by running the game in a browser and verify
 
 1. Enemy/trap collisions and unit-loss feedback
 2. Army-growth power-up behavior and wider firing spread as army size increases
-3. Progressive difficulty over time without playfield resets
+3. Scripted level progression and setup level-editor save/export flow
 4. Stable touch steering on iPhone/iPad Safari

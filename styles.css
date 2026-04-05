@@ -114,6 +114,34 @@ body {
   padding: 0.34rem 0.38rem;
 }
 
+.level-script-editor {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  background: #081b2b;
+  border: 1px solid #4f7895;
+  border-radius: 10px;
+  color: #effaff;
+  font-size: 0.82rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  line-height: 1.35;
+  padding: 0.55rem 0.6rem;
+}
+
+.level-editor-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  margin-top: 0.45rem;
+}
+
+.level-editor-status {
+  margin: 0.45rem 0 0;
+  min-height: 1.1rem;
+  color: #a5dfff;
+  font-size: 0.83rem;
+}
+
 .setup-presets {
   display: grid;
   grid-template-columns: auto minmax(120px, 1fr) auto minmax(120px, 1fr) auto;
@@ -301,6 +329,9 @@ h1 {
     grid-template-columns: minmax(0, 1fr);
   }
   .setup-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .level-editor-actions {
     grid-template-columns: minmax(0, 1fr);
   }
 }
