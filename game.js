@@ -515,6 +515,7 @@
         pattern: ev.pattern,
         laneNumber: ev.laneNumber,
         phase: Math.random() * Math.PI * 2,
+        trackingPlayer: false,
         vx: 0,
         speed: baseSpeed,
       });
@@ -646,13 +647,9 @@
   }
 
   function fireProjectile() {
-    const width = formationRangeX() * VOLLEY_WIDTH_MULTIPLIER;
-    const fromCenter = state.armySize < SMALL_ARMY_CENTER_FIRE_THRESHOLD;
-    const offset = fromCenter ? 0 : (Math.random() - 0.5) * width;
-    const y = fromCenter ? state.playerY : state.playerY - formationRangeY() - 20;
     state.projectiles.push({
-      x: state.playerX + offset,
-      y,
+      x: state.playerX,
+      y: state.playerY,
       r: 5,
       speed: BASE_PROJECTILE_SPEED + state.level * PROJECTILE_SPEED_PER_LEVEL,
     });
@@ -829,12 +826,12 @@
 
   function updateEntities(dt) {
     const enemyHoldY = state.playerY - ENEMY_HOLD_LINE_OFFSET;
+    const enemyTrackingThresholdY = ROAD_HORIZON_Y + (enemyHoldY - ROAD_HORIZON_Y) * 0.5;
 
     for (const e of state.entities) {
       if (e.kind === 'enemy') {
         if (e.anchored) {
-          const dir = state.playerX > e.x ? 1 : -1;
-          e.x += dir * dt * 110;
+          e.x = state.playerX;
           e.y = enemyHoldY;
         } else {
           if (e.pattern === 'zigzag') {
@@ -845,6 +842,10 @@
             e.x += dir * dt * 160;
           }
           e.y += e.speed * dt;
+          if (!e.trackingPlayer && e.y >= enemyTrackingThresholdY) {
+            e.trackingPlayer = true;
+          }
+          if (e.trackingPlayer) e.x = state.playerX;
           if (e.y >= enemyHoldY) {
             anchorEnemyIfNeeded(e, enemyHoldY);
           }
@@ -1266,64 +1267,47 @@
   function drawMonster(e) {
     const isFlank = e.pattern === 'flank';
     const isZigZag = e.pattern === 'zigzag';
-    const body = isFlank ? '#ffc487' : isZigZag ? '#ff92ce' : '#ff6a76';
-    const bodyDark = isFlank ? '#cc7d49' : isZigZag ? '#c55c97' : '#c53f4f';
-    const eye = isFlank ? '#2d1a0f' : '#2b1027';
+    const accent = isFlank ? '#ffbf74' : isZigZag ? '#75e1f3' : '#ff887d';
     const rx = e.w * 0.5;
     const ry = e.h * 0.5;
 
-    ctx.fillStyle = 'rgba(22, 5, 15, 0.28)';
+    ctx.fillStyle = 'rgba(8, 17, 24, 0.28)';
     ctx.beginPath();
     ctx.ellipse(e.x, e.y + ry * 0.65, rx * 0.75, ry * 0.32, 0, 0, Math.PI * 2);
     ctx.fill();
 
     const grad = ctx.createLinearGradient(e.x, e.y - ry, e.x, e.y + ry);
-    grad.addColorStop(0, '#ffe3d5');
-    grad.addColorStop(0.25, body);
-    grad.addColorStop(1, bodyDark);
+    grad.addColorStop(0, '#95adbf');
+    grad.addColorStop(0.5, '#5f7388');
+    grad.addColorStop(1, '#3a4a5c');
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.ellipse(e.x, e.y, rx, ry, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#57202f';
-    ctx.lineWidth = 2.4;
+    ctx.strokeStyle = '#233243';
+    ctx.lineWidth = 2.2;
     ctx.stroke();
 
-    const hornY = e.y - ry * 0.58;
-    ctx.fillStyle = '#f9e8d8';
+    ctx.fillStyle = 'rgba(170, 196, 216, 0.7)';
     ctx.beginPath();
-    ctx.moveTo(e.x - rx * 0.2, hornY + 3);
-    ctx.lineTo(e.x - rx * 0.48, hornY - 16);
-    ctx.lineTo(e.x - rx * 0.03, hornY - 7);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(e.x + rx * 0.2, hornY + 3);
-    ctx.lineTo(e.x + rx * 0.48, hornY - 16);
-    ctx.lineTo(e.x + rx * 0.03, hornY - 7);
-    ctx.closePath();
+    ctx.ellipse(e.x, e.y - ry * 0.1, rx * 0.82, ry * 0.58, 0, Math.PI, 0);
     ctx.fill();
 
-    ctx.fillStyle = eye;
-    ctx.beginPath();
-    ctx.arc(e.x - rx * 0.23, e.y - ry * 0.08, 5, 0, Math.PI * 2);
-    ctx.arc(e.x + rx * 0.23, e.y - ry * 0.08, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(e.x - rx * 0.2, e.y - ry * 0.14, 1.7, 0, Math.PI * 2);
-    ctx.arc(e.x + rx * 0.26, e.y - ry * 0.14, 1.7, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = '#3b0d1a';
+    ctx.strokeStyle = accent;
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(e.x - rx * 0.24, e.y + ry * 0.2);
-    ctx.quadraticCurveTo(e.x, e.y + ry * 0.42, e.x + rx * 0.24, e.y + ry * 0.2);
+    ctx.moveTo(e.x - rx * 0.55, e.y);
+    ctx.lineTo(e.x + rx * 0.55, e.y);
     ctx.stroke();
-    ctx.fillStyle = '#fff6ed';
-    ctx.fillRect(e.x - 8, e.y + ry * 0.2, 6, 8);
-    ctx.fillRect(e.x + 2, e.y + ry * 0.2, 6, 8);
+
+    ctx.strokeStyle = '#afc9dc';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(e.x - rx * 0.2, e.y - ry * 0.22);
+    ctx.lineTo(e.x + rx * 0.2, e.y - ry * 0.22);
+    ctx.moveTo(e.x - rx * 0.15, e.y + ry * 0.24);
+    ctx.lineTo(e.x + rx * 0.15, e.y + ry * 0.24);
+    ctx.stroke();
   }
 
   function drawEntities() {
