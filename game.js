@@ -76,6 +76,7 @@
   const ENEMY_BREACH_TICK_SECONDS = 1;
   const ENEMY_TRACKING_THRESHOLD_RATIO = 0.3;
   const ENEMY_PLAYER_FOLLOW_LAG_SECONDS = 0.5;
+  const ENEMY_PLAYER_FOLLOW_LAG_MIN_SECONDS = 0.001;
   const ENTITY_CLEANUP_MARGIN = 120;
   const ARMY_BAR_MAX_UNITS = 180;
   const PAUSED_ARMY_MAX = 300;
@@ -827,7 +828,7 @@
   }
 
   function followPlayerX(enemy, dt) {
-    const followLag = Math.max(ENEMY_PLAYER_FOLLOW_LAG_SECONDS, 0.001);
+    const followLag = Math.max(ENEMY_PLAYER_FOLLOW_LAG_SECONDS, ENEMY_PLAYER_FOLLOW_LAG_MIN_SECONDS);
     const followAlpha = 1 - Math.exp(-dt / followLag);
     enemy.x += (state.playerX - enemy.x) * followAlpha;
   }
