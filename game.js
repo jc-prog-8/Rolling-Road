@@ -515,6 +515,7 @@
         pattern: ev.pattern,
         laneNumber: ev.laneNumber,
         phase: Math.random() * Math.PI * 2,
+        trackingPlayer: false,
         vx: 0,
         speed: baseSpeed,
       });
@@ -825,7 +826,7 @@
 
   function updateEntities(dt) {
     const enemyHoldY = state.playerY - ENEMY_HOLD_LINE_OFFSET;
-    const enemyTrackY = ROAD_HORIZON_Y + (enemyHoldY - ROAD_HORIZON_Y) * 0.5;
+    const enemyTrackingThresholdY = ROAD_HORIZON_Y + (enemyHoldY - ROAD_HORIZON_Y) * 0.5;
 
     for (const e of state.entities) {
       if (e.kind === 'enemy') {
@@ -841,9 +842,8 @@
             e.x += dir * dt * 160;
           }
           e.y += e.speed * dt;
-          if (!e.trackingPlayer && e.y >= enemyTrackY) {
+          if (!e.trackingPlayer && e.y >= enemyTrackingThresholdY) {
             e.trackingPlayer = true;
-            e.x = state.playerX;
           }
           if (e.trackingPlayer) e.x = state.playerX;
           if (e.y >= enemyHoldY) {
