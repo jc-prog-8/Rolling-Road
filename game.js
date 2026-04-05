@@ -124,6 +124,10 @@
   const applyChangesBtnEl = document.getElementById('applyChangesBtn');
   const startGameBtnEl = document.getElementById('startGameBtn');
   const resetDefaultsBtnEl = document.getElementById('resetDefaultsBtn');
+  const levelScriptEditorEl = document.getElementById('levelScriptEditor');
+  const resetLevelScriptBtnEl = document.getElementById('resetLevelScriptBtn');
+  const exportLevelScriptBtnEl = document.getElementById('exportLevelScriptBtn');
+  const levelEditorStatusEl = document.getElementById('levelEditorStatus');
 
   if (buildTimestampEl) {
     buildTimestampEl.textContent = 'Build made: 2026-04-05T14:09:48.041Z';
@@ -153,6 +157,11 @@
     trapSpawnTimer: 0,
     powerSpawnTimer: 0,
     pointerActive: false,
+    levelScript: null,
+    scriptCursor: 0,
+    activeSection: '',
+    scriptedEvents: [],
+    totalMonstersDefeated: 0,
   };
 
   const setupConfig = {
@@ -269,6 +278,296 @@
   }
 
   const SETUP_STORAGE_KEY = 'rollingRoad.setup_v1';
+  const LEVEL_SCRIPT_STORAGE_KEY = 'rollingRoad.level_script_v1';
+
+  const DEFAULT_LEVEL_SCRIPT = {
+    levels: [
+      {
+        id: 1,
+        name: 'Structured Level 1',
+        duration: 120,
+        sections: [
+          {
+            id: 'intro',
+            label: 'Start',
+            start: 0,
+            end: 20,
+            events: [
+              { t: 3, kind: 'enemy', pattern: 'straight', laneNumber: 1 },
+              { t: 11, kind: 'power', p: 'growth', laneNumber: 1, requiredKills: 1, capHint: 5 }
+            ]
+          },
+          {
+            id: 'surge',
+            label: 'Army +3 push',
+            start: 20,
+            end: 62,
+            events: [
+              { t: 22, kind: 'enemy', pattern: 'straight', laneNumber: 0 },
+              { t: 27, kind: 'enemy', pattern: 'zigzag', laneNumber: 2 },
+              { t: 32, kind: 'enemy', pattern: 'straight', laneNumber: 1 },
+              { t: 38, kind: 'enemy', pattern: 'flank', laneNumber: 0 },
+              { t: 44, kind: 'enemy', pattern: 'zigzag', laneNumber: 2 },
+              { t: 50, kind: 'enemy', pattern: 'straight', laneNumber: 1 },
+              // requiredKills delays this power-up until enough monsters are defeated.
+              { t: 58, kind: 'power', p: 'growth', laneNumber: 1, requiredKills: 7, capHint: 10 }
+            ]
+          },
+          {
+            id: 'crossfire',
+            label: 'Crossfire',
+            start: 62,
+            end: 94,
+            events: [
+              { t: 64, kind: 'trap', pattern: 'static', laneNumber: 1 },
+              { t: 67, kind: 'enemy', pattern: 'flank', laneNumber: 0 },
+              { t: 69, kind: 'enemy', pattern: 'flank', laneNumber: 2 },
+              { t: 73, kind: 'enemy', pattern: 'zigzag', laneNumber: 1 },
+              { t: 78, kind: 'enemy', pattern: 'straight', laneNumber: 0 },
+              { t: 82, kind: 'enemy', pattern: 'straight', laneNumber: 2 },
+              { t: 87, kind: 'power', p: 'growth', laneNumber: 0 }
+            ]
+          },
+          {
+            id: 'finish',
+            label: 'Finish',
+            start: 94,
+            end: 120,
+            events: [
+              { t: 97, kind: 'enemy', pattern: 'straight', laneNumber: 1 },
+              { t: 102, kind: 'trap', pattern: 'timed', laneNumber: 0 },
+              { t: 107, kind: 'enemy', pattern: 'zigzag', laneNumber: 2 },
+              { t: 112, kind: 'enemy', pattern: 'flank', laneNumber: 1 }
+            ]
+          }
+        ]
+      },
+      {
+        id: 2,
+        name: 'Structured Level 2',
+        duration: 105,
+        sections: [
+          {
+            id: 'start',
+            label: 'Start',
+            start: 0,
+            end: 30,
+            events: [
+              { t: 4, kind: 'enemy', pattern: 'straight', laneNumber: 1 },
+              { t: 9, kind: 'enemy', pattern: 'zigzag', laneNumber: 0 },
+              { t: 15, kind: 'enemy', pattern: 'zigzag', laneNumber: 2 },
+              { t: 21, kind: 'power', p: 'growth', laneNumber: 1, capHint: 8 }
+            ]
+          },
+          {
+            id: 'finish',
+            label: 'Finish',
+            start: 30,
+            end: 105,
+            events: [
+              { t: 34, kind: 'trap', pattern: 'timed', laneNumber: 1 },
+              { t: 38, kind: 'enemy', pattern: 'flank', laneNumber: 0 },
+              { t: 42, kind: 'enemy', pattern: 'flank', laneNumber: 2 },
+              { t: 48, kind: 'enemy', pattern: 'straight', laneNumber: 1 },
+              { t: 56, kind: 'power', p: 'growth', laneNumber: 2, capHint: 12 },
+              { t: 70, kind: 'trap', pattern: 'static', laneNumber: 0 },
+              { t: 79, kind: 'enemy', pattern: 'zigzag', laneNumber: 1 },
+              { t: 92, kind: 'enemy', pattern: 'flank', laneNumber: 1 }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+
+  function deepClone(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function defaultLevelScriptText() {
+    return JSON.stringify(DEFAULT_LEVEL_SCRIPT, null, 2);
+  }
+
+  function setLevelEditorStatus(message) {
+    if (!levelEditorStatusEl) return;
+    levelEditorStatusEl.textContent = message;
+  }
+
+  function saveLevelScriptToStorage(rawScript) {
+    try {
+      localStorage.setItem(LEVEL_SCRIPT_STORAGE_KEY, rawScript);
+      return true;
+    } catch (e) {
+      setLevelEditorStatus('Level script save failed.');
+      return false;
+    }
+  }
+
+  function loadLevelScriptFromStorage() {
+    try {
+      const raw = localStorage.getItem(LEVEL_SCRIPT_STORAGE_KEY);
+      return raw || defaultLevelScriptText();
+    } catch (e) {
+      return defaultLevelScriptText();
+    }
+  }
+
+  // Script event shape:
+  // - enemy/trap events spawn immediately at time t.
+  // - power events may include requiredKills, which delays spawn until
+  //   state.totalMonstersDefeated reaches that value.
+  function normalizeScriptEvent(event) {
+    const kind = event.kind;
+    if (kind !== 'enemy' && kind !== 'trap' && kind !== 'power') return null;
+    const at = Number(event.t);
+    if (!Number.isFinite(at) || at < 0) return null;
+    const lane = Number.isInteger(event.laneNumber) ? Math.max(0, Math.min(ROAD_LANE_COUNT - 1, event.laneNumber)) : randomRoadLane();
+    if (kind === 'enemy') {
+      const pattern = ['straight', 'zigzag', 'flank'].includes(event.pattern) ? event.pattern : 'straight';
+      return { t: at, kind: 'enemy', pattern, laneNumber: lane };
+    }
+    if (kind === 'trap') {
+      const pattern = event.pattern === 'timed' ? 'timed' : 'static';
+      return { t: at, kind: 'trap', pattern, laneNumber: lane };
+    }
+    const capHint = Number(event.capHint);
+    return {
+      t: at,
+      kind: 'power',
+      p: 'growth',
+      laneNumber: lane,
+      ...(Number.isFinite(capHint) && capHint > 0 ? { capHint } : {})
+    };
+  }
+
+  function normalizeLevelScript(scriptData) {
+    if (!scriptData || !Array.isArray(scriptData.levels) || scriptData.levels.length === 0) {
+      return deepClone(DEFAULT_LEVEL_SCRIPT);
+    }
+    const normalizedLevels = [];
+    for (const [index, rawLevel] of scriptData.levels.entries()) {
+      if (!rawLevel || !Array.isArray(rawLevel.sections) || rawLevel.sections.length === 0) continue;
+      const duration = Number.isFinite(Number(rawLevel.duration)) ? Math.max(20, Number(rawLevel.duration)) : 120;
+      const sections = [];
+      for (const [secIndex, rawSection] of rawLevel.sections.entries()) {
+        if (!rawSection || !Array.isArray(rawSection.events)) continue;
+        const start = Number.isFinite(Number(rawSection.start)) ? Math.max(0, Number(rawSection.start)) : 0;
+        const end = Number.isFinite(Number(rawSection.end)) ? Math.max(start + 1, Number(rawSection.end)) : duration;
+        const events = rawSection.events
+          .map(normalizeScriptEvent)
+          .filter(Boolean)
+          .sort((a, b) => a.t - b.t);
+        if (events.length === 0) continue;
+        sections.push({
+          id: rawSection.id || `section-${secIndex + 1}`,
+          label: rawSection.label || `Section ${secIndex + 1}`,
+          start,
+          end,
+          events,
+        });
+      }
+      if (sections.length === 0) continue;
+      normalizedLevels.push({
+        id: Number.isFinite(Number(rawLevel.id)) ? Number(rawLevel.id) : index + 1,
+        name: rawLevel.name || `Level ${index + 1}`,
+        duration,
+        sections,
+      });
+    }
+    if (normalizedLevels.length === 0) return deepClone(DEFAULT_LEVEL_SCRIPT);
+    return { levels: normalizedLevels };
+  }
+
+  function parseLevelScript(rawScript) {
+    try {
+      const parsed = JSON.parse(rawScript);
+      return normalizeLevelScript(parsed);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function initializeLevelScript() {
+    if (!levelScriptEditorEl) return;
+    const raw = loadLevelScriptFromStorage();
+    const parsed = parseLevelScript(raw);
+    const safeRaw = parsed ? JSON.stringify(parsed, null, 2) : defaultLevelScriptText();
+    levelScriptEditorEl.value = safeRaw;
+    saveLevelScriptToStorage(safeRaw);
+    const safeParsed = parseLevelScript(safeRaw);
+    state.levelScript = safeParsed || deepClone(DEFAULT_LEVEL_SCRIPT);
+    setLevelEditorStatus('Level script auto-saved locally.');
+  }
+
+  function saveLevelScriptFromEditor() {
+    if (!levelScriptEditorEl) return false;
+    const raw = levelScriptEditorEl.value;
+    const parsed = parseLevelScript(raw);
+    if (!parsed) {
+      setLevelEditorStatus('Script has invalid JSON.');
+      return false;
+    }
+    const normalizedRaw = JSON.stringify(parsed, null, 2);
+    levelScriptEditorEl.value = normalizedRaw;
+    if (!saveLevelScriptToStorage(normalizedRaw)) return false;
+    state.levelScript = parsed;
+    setLevelEditorStatus(`Saved to localStorage (${new Date().toLocaleTimeString()}).`);
+    return true;
+  }
+
+  function resetLevelScript() {
+    if (!levelScriptEditorEl) return;
+    levelScriptEditorEl.value = defaultLevelScriptText();
+    saveLevelScriptFromEditor();
+  }
+
+  function exportLevelScript() {
+    if (!saveLevelScriptFromEditor()) return;
+    if (!levelScriptEditorEl) return;
+    const blob = new Blob([levelScriptEditorEl.value], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'rolling-road-level-script.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    setLevelEditorStatus('Level script exported.');
+  }
+
+  function eventsForLevel(levelIndex) {
+    const level = state.levelScript?.levels?.[levelIndex];
+    if (!level || !Array.isArray(level.sections)) return [];
+    const events = [];
+    for (const section of level.sections) {
+      for (const event of section.events || []) {
+        events.push({
+          ...event,
+          sectionLabel: section.label || '',
+          sectionStart: Number(section.start) || 0,
+          sectionEnd: Number(section.end) || Number(level.duration) || 120,
+        });
+      }
+    }
+    return events.sort((a, b) => a.t - b.t);
+  }
+
+  function applyScriptedLevelRuntime(levelIndex) {
+    LEVEL_DURATION = Number(state.levelScript?.levels?.[levelIndex]?.duration) || (RUN_DURATION_MINUTES * 60);
+    state.scriptedEvents = eventsForLevel(levelIndex);
+    state.scriptCursor = 0;
+    state.activeSection = activeSectionLabel(levelIndex, 0);
+  }
+
+  function activeSectionLabel(levelIndex, timeInLevel) {
+    const level = state.levelScript?.levels?.[levelIndex];
+    if (!level || !Array.isArray(level.sections)) return '';
+    for (const section of level.sections) {
+      const start = Number(section.start) || 0;
+      const end = Number(section.end) || 0;
+      if (timeInLevel >= start && timeInLevel < end) return section.label || '';
+    }
+    return '';
+  }
 
   function saveSetupToStorage(values) {
     try {
@@ -425,6 +724,10 @@
   }
 
   function applySetupValues(values) {
+    saveLevelScriptFromEditor();
+    if (!state.levelScript) {
+      state.levelScript = deepClone(DEFAULT_LEVEL_SCRIPT);
+    }
     saveGameStartToAutosave(values);
     RUN_DURATION_MINUTES = values.runDurationMinutes;
     LEVEL_DURATION = RUN_DURATION_MINUTES * 60;
@@ -443,6 +746,7 @@
     state.timeInLevel = 0;
     state.totalTime = 0;
     state.score = 0;
+    state.totalMonstersDefeated = 0;
     state.entities = [];
     state.projectiles = [];
     state.fx = [];
@@ -455,15 +759,17 @@
     state.running = true;
     state.started = true;
     state.paused = false;
+    applyScriptedLevelRuntime(0);
     if (pauseBtnEl) pauseBtnEl.textContent = 'Pause';
     syncLiveControlsFromCurrentState();
     updateSettingsUiState();
     updateHud();
-    statusEl.textContent = 'Game started. Tap or drag to steer.';
+    statusEl.textContent = 'Level 1 start. Clear monsters and collect power-ups.';
   }
 
   function initSetupScreen() {
     setupParameterBindings();
+    initializeLevelScript();
     if (!setupFormEl) return;
     statusEl.textContent = 'Adjust setup options, then tap Start Game.';
     // Load saved setup values (if any) and apply to inputs
@@ -490,6 +796,14 @@
       applySetupValues(setupValues);
       saveSetupToStorage(setupValues);
     });
+    levelScriptEditorEl?.addEventListener('input', () => {
+      saveLevelScriptFromEditor();
+    });
+    levelScriptEditorEl?.addEventListener('blur', () => {
+      saveLevelScriptFromEditor();
+    });
+    resetLevelScriptBtnEl?.addEventListener('click', resetLevelScript);
+    exportLevelScriptBtnEl?.addEventListener('click', exportLevelScript);
     applyChangesBtnEl?.addEventListener('click', applyPausedLiveSettings);
     resetDefaultsBtnEl?.addEventListener('click', resetSetupToDefaults);
   }
@@ -552,6 +866,7 @@
         shotsHit: 0,
         laneNumber: ev.laneNumber,
         powerType: ev.p,
+        capHint: Number.isFinite(Number(ev.capHint)) ? Number(ev.capHint) : null,
         speed: currentSpeed() * POWER_UP_SPEED_MULTIPLIER,
       });
     }
@@ -721,31 +1036,40 @@
     });
   }
 
-  function spawnFromRates(dt) {
-    state.enemySpawnTimer -= dt;
-    while (state.enemySpawnTimer <= 0) {
-      const pattern = selectEnemyPattern();
-      const laneNumber = randomRoadLane(occupiedPowerLanes());
-      spawnEntity({ kind: 'enemy', pattern, laneNumber });
-      state.enemySpawnTimer += spawnIntervalFromRate(currentEnemySpawnRate());
+  function spawnScriptedEvent(event) {
+    if (event.kind === 'power') {
+      // requiredKills gates power-up spawn until enough monsters have been defeated.
+      if (Number.isFinite(event.requiredKills) && state.totalMonstersDefeated < event.requiredKills) {
+        event.t = Math.max(event.t, state.timeInLevel + 0.5);
+        return false;
+      }
+      spawnEntity({ kind: 'power', p: 'growth', laneNumber: event.laneNumber, capHint: event.capHint });
+      return true;
     }
-
-    state.trapSpawnTimer -= dt;
-    while (state.trapSpawnTimer <= 0) {
-      const pattern = Math.random() < TRAP_PATTERN_STATIC_PROBABILITY ? 'static' : 'timed';
-      spawnEntity({ kind: 'trap', pattern, x: randomRoadX() });
-      state.trapSpawnTimer += spawnIntervalFromRate(currentTrapSpawnRate());
+    if (event.kind === 'trap') {
+      spawnEntity({ kind: 'trap', pattern: event.pattern, laneNumber: event.laneNumber });
+      return true;
     }
+    spawnEntity({ kind: 'enemy', pattern: event.pattern, laneNumber: event.laneNumber });
+    return true;
+  }
 
-    state.powerSpawnTimer -= dt;
-    while (state.powerSpawnTimer <= 0) {
-      spawnEntity({ kind: 'power', p: 'growth', laneNumber: randomRoadLane() });
-      state.powerSpawnTimer += spawnIntervalFromRate(currentPowerSpawnRate());
+  function spawnFromRates() {
+    if (!state.scriptedEvents || state.scriptedEvents.length === 0) return;
+    while (state.scriptCursor < state.scriptedEvents.length) {
+      const event = state.scriptedEvents[state.scriptCursor];
+      if (state.timeInLevel < event.t) break;
+      const spawned = spawnScriptedEvent(event);
+      if (!spawned) break;
+      state.scriptCursor += 1;
+      if (event.sectionLabel) {
+        state.activeSection = event.sectionLabel;
+      }
     }
   }
 
   function updateCore(dt) {
-    spawnFromRates(dt);
+    spawnFromRates();
     updateEntities(dt);
     updateFiring(dt);
     updateProjectiles(dt);
@@ -801,8 +1125,11 @@
     state.armySize += count;
   }
 
-  function applyGrowthPowerByShots(shotsHit) {
-    const rewardCap = Math.round(lerp(POWER_REWARD_CAP_START, POWER_REWARD_CAP_END, overallProgressRatio()));
+  function applyGrowthPowerByShots(shotsHit, capHint) {
+    const scriptedCap = Number(capHint);
+    const rewardCap = Number.isFinite(scriptedCap) && scriptedCap > 0
+      ? Math.round(scriptedCap)
+      : Math.round(lerp(POWER_REWARD_CAP_START, POWER_REWARD_CAP_END, overallProgressRatio()));
     const gain = Math.min(shotsHit, rewardCap);
     if (gain > 0) {
       addUnits(gain);
@@ -920,7 +1247,7 @@
         const nx = (e.x - px) / (formationW + e.r);
         const ny = (e.y - pickupCenterY) / (formationH + e.r);
         if (nx * nx + ny * ny <= 1) {
-          applyGrowthPowerByShots(e.shotsHit || 0);
+          applyGrowthPowerByShots(e.shotsHit || 0, e.capHint);
           state.fx.push({ type: 'pickup', x: e.x, y: e.y, ttl: 0.45 });
           return false;
         }
@@ -965,6 +1292,7 @@
           state.fx.push({ type: 'hit', x: target.x, y: target.y, ttl: 0.2 });
           if (target.hp <= 0) {
             target.destroyed = true;
+            state.totalMonstersDefeated += 1;
             state.score += 22 + state.level * 3;
           }
         }
@@ -993,7 +1321,8 @@
 
   function nextLevel() {
     state.level += 1;
-    if (state.level >= LEVEL_COUNT) {
+    const levelCount = state.levelScript?.levels?.length || 0;
+    if (state.level >= levelCount) {
       state.running = false;
       state.victory = true;
       state.paused = false;
@@ -1005,9 +1334,7 @@
     state.timeInLevel = 0;
     state.entities = [];
     state.projectiles = [];
-    state.enemySpawnTimer = spawnIntervalFromRate(currentEnemySpawnRate());
-    state.trapSpawnTimer = spawnIntervalFromRate(currentTrapSpawnRate());
-    state.powerSpawnTimer = spawnIntervalFromRate(currentPowerSpawnRate());
+    applyScriptedLevelRuntime(state.level);
     statusEl.textContent = `Level ${state.level + 1} start`;
   }
 
@@ -1015,6 +1342,9 @@
     if (!state.running) return;
 
     updateState(dt);
+    if (state.timeInLevel >= LEVEL_DURATION) {
+      nextLevel();
+    }
   }
 
   function getRoadBoundsAtY(y) {
@@ -1452,7 +1782,10 @@
   }
 
   function updateHud() {
-    levelEl.textContent = 'Endless';
+    const levelName = state.levelScript?.levels?.[state.level]?.name || `Level ${state.level + 1}`;
+    const sectionNow = activeSectionLabel(state.level, state.timeInLevel);
+    if (sectionNow) state.activeSection = sectionNow;
+    levelEl.textContent = state.activeSection ? `${levelName} · ${state.activeSection}` : levelName;
     const mins = Math.floor(state.timeInLevel / 60);
     const secs = Math.floor(state.timeInLevel % 60).toString().padStart(2, '0');
     timeEl.textContent = `${mins}:${secs}`;
