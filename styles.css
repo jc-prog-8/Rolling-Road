@@ -55,6 +55,13 @@ body {
   letter-spacing: 0.04em;
 }
 
+.setup-build-timestamp {
+  margin: 0 0 0.45rem;
+  color: #7fe8ff;
+  font-size: 0.82rem;
+  letter-spacing: 0.03em;
+}
+
 .setup-intro {
   margin: 0.35rem 0 0.8rem;
   color: #cce7f6;
