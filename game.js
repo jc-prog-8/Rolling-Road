@@ -827,7 +827,8 @@
   }
 
   function followPlayerX(enemy, dt) {
-    const followAlpha = 1 - Math.exp(-dt / ENEMY_PLAYER_FOLLOW_LAG_SECONDS);
+    const followLag = Math.max(ENEMY_PLAYER_FOLLOW_LAG_SECONDS, 0.001);
+    const followAlpha = 1 - Math.exp(-dt / followLag);
     enemy.x += (state.playerX - enemy.x) * followAlpha;
   }
 
